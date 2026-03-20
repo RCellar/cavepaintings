@@ -12,6 +12,7 @@ A browser-based interactive drawing canvas that integrates with Claude Code. Dra
 - **Export/import** -- PNG, SVG, and JSON export; JSON re-import to restore diagrams
 - **Auto-save** -- canvas state persists in localStorage across browser refreshes
 - **Submit to Claude** -- sends a PNG screenshot + Fabric.js JSON + optional message to Claude Code over WebSocket
+- **Automatic notifications** -- a UserPromptSubmit hook detects new submissions and injects them into Claude's context when you send any message
 - **Connection status** -- green/red indicator with automatic reconnect (exponential backoff)
 
 ## Quick Start
@@ -115,6 +116,16 @@ Once the skills are available:
 
 The canvas opens in your browser. Draw, paste screenshots, annotate -- then click **Submit to Claude** to send the canvas contents into your active Claude Code conversation. Claude receives both a PNG image (for visual understanding) and the full Fabric.js JSON (for programmatic reasoning about diagram objects).
 
+### Submission flow
+
+1. Draw or paste an image on the canvas
+2. Click **Submit to Claude** (button briefly turns green with "Sent!")
+3. Type anything in Claude Code (even just "check")
+4. The plugin's `UserPromptSubmit` hook automatically detects the new submission and injects it into Claude's context
+5. Claude reads the PNG and responds
+
+The hook tracks the last-seen submission to avoid duplicate notifications.
+
 ## Architecture
 
 ```
@@ -127,6 +138,7 @@ Browser Canvas  --WebSocket-->  Node.js Server  --files-->  Claude Code
 - **index.html + style.css** -- dark-themed UI with left toolbar, floating properties panel, bottom submit bar
 - **skills/cavepaintings/** -- start skill with SKILL.md + utility scripts (session check, server start)
 - **skills/cavepaintings-stop/** -- stop skill with SKILL.md + stop script
+- **hooks/** -- `UserPromptSubmit` hook that detects new canvas submissions
 - **.claude-plugin/** -- plugin metadata for marketplace installation
 
 ## Running Tests
@@ -136,6 +148,23 @@ npm test
 ```
 
 Runs 7 tests across 4 suites (HTTP serving, WebSocket protocol, submission storage, server lifecycle, end-to-end flow).
+
+## Updating
+
+After making changes to the plugin:
+
+```bash
+npm run bump 0.2.0                          # updates version in package.json, plugin.json, marketplace.json + refreshes local cache
+git add -A && git commit -m "chore: bump to 0.2.0"
+git push
+```
+
+Then in Claude Code:
+
+```
+/plugin update cavepaintings@cavepaintings-marketplace
+/reload-plugins
+```
 
 ## Tech Stack
 
