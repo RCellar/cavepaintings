@@ -106,7 +106,7 @@ function handleSubmission(msg) {
   const base = path.join(SUBMISSIONS_DIR, timestamp);
 
   // Write PNG
-  const pngData = (msg.png || '').replace(/^data:image\/\w+;base64,/, '');
+  const pngData = (msg.image || '').replace(/^data:image\/\w+;base64,/, '');
   fs.writeFileSync(`${base}.png`, Buffer.from(pngData, 'base64'));
 
   // Write JSON
@@ -128,7 +128,7 @@ wss.on('connection', (socket) => {
       const msg = JSON.parse(raw.toString());
       if (msg.type === 'submit') {
         handleSubmission(msg);
-        socket.send(JSON.stringify({ type: 'ack' }));
+        socket.send(JSON.stringify({ type: 'ack', timestamp: Date.now() }));
       }
     } catch (e) {
       // ignore malformed messages
