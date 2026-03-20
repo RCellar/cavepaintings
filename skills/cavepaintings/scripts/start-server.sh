@@ -22,6 +22,11 @@ case "${OSTYPE:-}" in
 esac
 if [[ -n "${MSYSTEM:-}" ]]; then FOREGROUND="true"; fi
 
+# Install dependencies if needed
+if [[ ! -d "$PROJECT_ROOT/node_modules" ]]; then
+  npm install --omit=dev --prefix "$PROJECT_ROOT" > /dev/null 2>&1
+fi
+
 # Kill existing session if running
 STATE_FILE="$(node -e "const os=require('os'),p=require('path');console.log(p.join(os.tmpdir(),'cavepaintings','state.json'))")"
 if [[ -f "$STATE_FILE" ]]; then

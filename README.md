@@ -56,6 +56,8 @@ The server automatically tries the next port if the default is in use.
 
 Cavepaintings ships with two Claude Code skills (`/cavepaintings` to start, `/cavepaintings-stop` to stop). There are several ways to make them available.
 
+**Prerequisite:** [Node.js](https://nodejs.org/) (v18+) and npm must be installed. The start script automatically runs `npm install` on first launch if dependencies are missing.
+
 ### Option A: Project-level skills (simplest)
 
 If you only need the skills in projects where cavepaintings is cloned, no extra setup is needed. Clone the repo into your working directory and Claude Code will discover the `skills/` folder automatically.
