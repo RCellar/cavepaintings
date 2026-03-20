@@ -367,10 +367,14 @@ function setupCanvasEvents() {
 // Undo / Redo
 // ---------------------------------------------------------------------------
 function saveState() {
-  const json = JSON.stringify(canvas.toJSON());
-  undoStack.push(json);
-  if (undoStack.length > 50) undoStack.shift();
-  redoStack = [];
+  try {
+    const json = JSON.stringify(canvas.toJSON());
+    undoStack.push(json);
+    if (undoStack.length > 50) undoStack.shift();
+    redoStack = [];
+  } catch (err) {
+    console.warn('Failed to save canvas state:', err);
+  }
 }
 
 function undo() {
@@ -573,17 +577,17 @@ function setupToolbar() {
   if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
 
   document.getElementById('btn-export-png').addEventListener('click', () => {
-    downloadFile(canvas.toDataURL({ format: 'png', multiplier: 1 }), 'cavepaintings.png');
+    downloadFile(canvas.toDataURL({ format: 'png', multiplier: 2 }), 'cavepaintings.png');
   });
 
   document.getElementById('btn-export-svg').addEventListener('click', () => {
     const blob = new Blob([canvas.toSVG()], { type: 'image/svg+xml' });
-    downloadFile(URL.createObjectURL(blob), 'cavepaintings.svg');
+    downloadFile(URL.createObjectURL(blob), 'cavepaintings.svg', true);
   });
 
   document.getElementById('btn-export-json').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(canvas.toJSON(), null, 2)], { type: 'application/json' });
-    downloadFile(URL.createObjectURL(blob), 'cavepaintings.json');
+    downloadFile(URL.createObjectURL(blob), 'cavepaintings.json', true);
   });
 
   document.getElementById('btn-import-json').addEventListener('click', () => {
@@ -611,11 +615,12 @@ function setupToolbar() {
   });
 }
 
-function downloadFile(url, filename) {
+function downloadFile(url, filename, revoke = false) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();
+  if (revoke) setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
 function addImageFromDataUrl(dataUrl) {
@@ -795,12 +800,18 @@ function submitToClaude() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
   const promptInput = document.getElementById('prompt-input');
-  const payload = {
-    type: 'submit',
-    image: canvas.toDataURL(),
-    diagram: canvas.toJSON(),
-    prompt: promptInput.value,
-  };
+  let payload;
+  try {
+    payload = {
+      type: 'submit',
+      image: canvas.toDataURL({ format: 'png', multiplier: 2 }),
+      diagram: canvas.toJSON(),
+      prompt: promptInput.value,
+    };
+  } catch (err) {
+    console.error('Failed to serialize canvas:', err);
+    return;
+  }
 
   ws.send(JSON.stringify(payload));
   showSubmitFeedback();
