@@ -19,6 +19,7 @@ let gridPattern = null;
 let autoSaveTimer = null;
 let brushColor = '#4a9eff';
 let brushWidth = 3;
+let clipboardObject = null;
 let currentTheme = 'dark';
 
 const themes = {
@@ -57,6 +58,7 @@ function initCanvas() {
   restoreFromLocalStorage();
   restoreTheme();
   connectWebSocket();
+  setupZoomIndicator();
 }
 
 // ---------------------------------------------------------------------------
@@ -641,6 +643,27 @@ function setupKeyboard() {
     if (e.ctrlKey || e.metaKey) {
       if (key === 'z') { e.preventDefault(); undo(); return; }
       if (key === 'y') { e.preventDefault(); redo(); return; }
+      if (key === 'c') {
+        const obj = canvas.getActiveObject();
+        if (obj) {
+          e.preventDefault();
+          obj.clone().then(cloned => { clipboardObject = cloned; });
+        }
+        return;
+      }
+      if (key === 'v') {
+        if (clipboardObject) {
+          e.preventDefault();
+          clipboardObject.clone().then(cloned => {
+            cloned.set({ left: cloned.left + 20, top: cloned.top + 20 });
+            canvas.add(cloned);
+            canvas.setActiveObject(cloned);
+            canvas.requestRenderAll();
+            saveState();
+          });
+        }
+        return;
+      }
     }
 
     const toolMap = { v: 'select', r: 'rect', e: 'ellipse', a: 'arrow', d: 'draw', t: 'text', i: 'image' };
@@ -797,10 +820,33 @@ function showSubmitFeedback() {
 }
 
 // ---------------------------------------------------------------------------
+// Zoom indicator
+// ---------------------------------------------------------------------------
+function setupZoomIndicator() {
+  const zoomEl = document.getElementById('zoom-level');
+  if (!zoomEl) return;
+
+  canvas.on('mouse:wheel', () => {
+    zoomEl.textContent = Math.round(canvas.getZoom() * 100) + '%';
+  });
+
+  zoomEl.addEventListener('click', () => {
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    zoomEl.textContent = '100%';
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', function () {
   initCanvas();
   document.getElementById('btn-submit').addEventListener('click', submitToClaude);
+  document.getElementById('prompt-input').addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      submitToClaude();
+    }
+  });
   window.addEventListener('resize', handleResize);
 });

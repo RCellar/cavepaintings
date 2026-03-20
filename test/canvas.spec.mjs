@@ -338,6 +338,98 @@ test.describe('Start server with session check', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Object copy/paste
+// ---------------------------------------------------------------------------
+
+test.describe('Object copy/paste', () => {
+  test('Ctrl+C and Ctrl+V duplicates a canvas object', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+
+    await page.evaluate(() => {
+      const rect = new fabric.Rect({
+        left: 100, top: 100, width: 100, height: 100,
+        fill: '#4a9eff', stroke: '#fff',
+      });
+      canvas.add(rect);
+      canvas.setActiveObject(rect);
+      canvas.renderAll();
+    });
+
+    const before = await page.evaluate(() => canvas.getObjects().length);
+    expect(before).toBe(1);
+
+    await page.keyboard.down('Control');
+    await page.keyboard.press('c');
+    await page.keyboard.up('Control');
+
+    await page.keyboard.down('Control');
+    await page.keyboard.press('v');
+    await page.keyboard.up('Control');
+
+    await page.waitForTimeout(100);
+    const after = await page.evaluate(() => canvas.getObjects().length);
+    expect(after).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ctrl+Enter submit
+// ---------------------------------------------------------------------------
+
+test.describe('Ctrl+Enter submit', () => {
+  test('Ctrl+Enter in prompt input triggers submit', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.waitForFunction(() => document.getElementById('btn-submit').disabled === false, { timeout: 5000 });
+
+    await page.fill('#prompt-input', 'test message');
+    await page.focus('#prompt-input');
+    await page.keyboard.down('Control');
+    await page.keyboard.press('Enter');
+    await page.keyboard.up('Control');
+
+    await page.waitForTimeout(200);
+    const btnText = await page.locator('#btn-submit').textContent();
+    expect(['Sending...', 'Sent!']).toContain(btnText);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Zoom indicator
+// ---------------------------------------------------------------------------
+
+test.describe('Zoom indicator', () => {
+  test('zoom indicator shows 100% by default', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+
+    const zoomText = await page.locator('#zoom-level').textContent();
+    expect(zoomText).toBe('100%');
+  });
+
+  test('clicking zoom indicator resets to 100%', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+
+    await page.evaluate(() => {
+      canvas.zoomToPoint(new fabric.Point(400, 300), 2.0);
+    });
+
+    await page.click('#zoom-level');
+    await page.waitForTimeout(100);
+
+    const result = await page.evaluate(() => ({
+      zoom: canvas.getZoom(),
+      text: document.getElementById('zoom-level').textContent,
+    }));
+
+    expect(result.zoom).toBe(1);
+    expect(result.text).toBe('100%');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Arrow tool performance
 // ---------------------------------------------------------------------------
 
