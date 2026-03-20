@@ -5,6 +5,10 @@
 // ---------------------------------------------------------------------------
 let canvas;
 let currentTool = 'select';
+// WebSocket state
+let ws = null;
+let wsReconnectDelay = 1000;
+let wsReconnectTimer = null;
 let isDrawingShape = false;
 let shapeOrigin = null;
 let activeShape = null;
@@ -36,6 +40,7 @@ function initCanvas() {
   setupKeyboard();
   setupAutoSave();
   restoreFromLocalStorage();
+  connectWebSocket();
 }
 
 // ---------------------------------------------------------------------------
@@ -570,9 +575,103 @@ function restoreFromLocalStorage() {
 }
 
 // ---------------------------------------------------------------------------
+// WebSocket – connect with exponential back-off
+// ---------------------------------------------------------------------------
+function connectWebSocket() {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${protocol}//${location.host}`;
+
+  try {
+    ws = new WebSocket(url);
+  } catch (err) {
+    scheduleReconnect();
+    return;
+  }
+
+  ws.addEventListener('open', () => {
+    wsReconnectDelay = 1000;
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    setConnectionStatus(true);
+  });
+
+  ws.addEventListener('close', () => {
+    setConnectionStatus(false);
+    scheduleReconnect();
+  });
+
+  ws.addEventListener('error', () => {
+    setConnectionStatus(false);
+  });
+
+  ws.addEventListener('message', (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      console.log('WS message:', msg);
+    } catch (_) {}
+  });
+}
+
+function scheduleReconnect() {
+  if (wsReconnectTimer) return;
+  wsReconnectTimer = setTimeout(() => {
+    wsReconnectTimer = null;
+    connectWebSocket();
+  }, wsReconnectDelay);
+  wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+}
+
+function setConnectionStatus(connected) {
+  const dot = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+  const btn = document.getElementById('btn-submit');
+
+  if (connected) {
+    dot.className = 'connected';
+    text.textContent = 'Connected';
+    btn.disabled = false;
+  } else {
+    dot.className = 'disconnected';
+    text.textContent = 'Disconnected';
+    btn.disabled = true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Submit to Claude
+// ---------------------------------------------------------------------------
+function submitToClaude() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+  const promptInput = document.getElementById('prompt-input');
+  const payload = {
+    type: 'submit',
+    image: canvas.toDataURL(),
+    diagram: canvas.toJSON(),
+    prompt: promptInput.value,
+  };
+
+  ws.send(JSON.stringify(payload));
+  showSubmitFeedback();
+}
+
+function showSubmitFeedback() {
+  const btn = document.getElementById('btn-submit');
+  const promptInput = document.getElementById('prompt-input');
+  const original = btn.textContent;
+  btn.style.background = '#50c878';
+  btn.textContent = 'Sent!';
+  promptInput.value = '';
+  setTimeout(() => {
+    btn.style.background = '';
+    btn.textContent = original;
+  }, 1500);
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', function () {
   initCanvas();
+  document.getElementById('btn-submit').addEventListener('click', submitToClaude);
   window.addEventListener('resize', handleResize);
 });
