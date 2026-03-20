@@ -389,8 +389,9 @@ function undo() {
   redoStack.push(current);
   const previous = undoStack[undoStack.length - 1];
   isLoadingState = true;
-  canvas.loadFromJSON(JSON.parse(previous), () => {
+  canvas.loadFromJSON(JSON.parse(previous)).then(() => {
     canvas.renderAll();
+    canvas.requestRenderAll();
     isLoadingState = false;
   });
 }
@@ -400,8 +401,9 @@ function redo() {
   const next = redoStack.pop();
   undoStack.push(next);
   isLoadingState = true;
-  canvas.loadFromJSON(JSON.parse(next), () => {
+  canvas.loadFromJSON(JSON.parse(next)).then(() => {
     canvas.renderAll();
+    canvas.requestRenderAll();
     isLoadingState = false;
   });
 }
@@ -746,9 +748,17 @@ function restoreFromLocalStorage() {
   const saved = localStorage.getItem('cavepaintings-canvas');
   if (!saved) return;
   try {
-    canvas.loadFromJSON(JSON.parse(saved), () => canvas.renderAll());
+    isLoadingState = true;
+    canvas.loadFromJSON(JSON.parse(saved)).then(() => {
+      canvas.renderAll();
+      isLoadingState = false;
+      // Reset undo stack to start from the restored state
+      undoStack = [saved];
+      redoStack = [];
+    });
   } catch (err) {
     console.warn('Could not restore canvas from localStorage:', err);
+    isLoadingState = false;
   }
 }
 
@@ -793,8 +803,11 @@ function connectWebSocket() {
       }
       if (msg.type === 'load') {
         if (msg.mode === 'replace') {
-          canvas.loadFromJSON(msg.diagram, () => {
+          isLoadingState = true;
+          canvas.loadFromJSON(msg.diagram).then(() => {
             canvas.renderAll();
+            canvas.requestRenderAll();
+            isLoadingState = false;
             saveState();
           });
         } else {
