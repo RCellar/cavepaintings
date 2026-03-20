@@ -360,7 +360,7 @@ export function setupToolbar() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = e => {
-      canvas.loadFromJSON(JSON.parse(e.target.result), () => { canvas.renderAll(); saveState(); });
+      canvas.loadFromJSON(JSON.parse(e.target.result)).then(() => { canvas.renderAll(); saveState(); });
     };
     reader.readAsText(file);
     this.value = '';
