@@ -62,43 +62,9 @@ If you only need the skills in projects where cavepaintings is cloned, no extra 
 
 ### Option B: Register as a custom marketplace plugin
 
-This makes the skills available globally across all your Claude Code sessions.
+This makes the skills available globally across all your Claude Code sessions. The repo already includes `.claude-plugin/` metadata.
 
-**1. Create the plugin metadata**
-
-Create a `.claude-plugin/` directory in the cavepaintings repo:
-
-```bash
-mkdir -p .claude-plugin
-```
-
-Create `.claude-plugin/plugin.json`:
-
-```json
-{
-  "name": "cavepaintings",
-  "description": "Browser-based drawing canvas for submitting diagrams and annotated images to Claude Code",
-  "version": "0.1.0",
-  "author": { "name": "RCellar" },
-  "repository": "https://github.com/RCellar/cavepaintings",
-  "license": "MIT"
-}
-```
-
-Create `.claude-plugin/marketplace.json`:
-
-```json
-{
-  "name": "cavepaintings-marketplace",
-  "description": "Cavepaintings drawing canvas plugin",
-  "owner": { "name": "RCellar" },
-  "plugins": [
-    { "name": "cavepaintings", "version": "0.1.0", "source": "./" }
-  ]
-}
-```
-
-**2. Register the marketplace in Claude Code**
+**1. Register the marketplace in Claude Code**
 
 Add the marketplace to your Claude Code settings (`~/.claude/settings.json`):
 
@@ -129,11 +95,11 @@ Navigate to **Discover**, find `cavepaintings`, and install it.
 
 ### Option C: Manual skill symlink
 
-If you prefer not to use the marketplace system, symlink the skill files into a project that has a `skills/` directory:
+If you prefer not to use the marketplace system, symlink the skill directories into a project that has a `skills/` directory:
 
 ```bash
-ln -s /path/to/cavepaintings/skills/cavepaintings.md /your/project/skills/cavepaintings.md
-ln -s /path/to/cavepaintings/skills/cavepaintings-stop.md /your/project/skills/cavepaintings-stop.md
+ln -s /path/to/cavepaintings/skills/cavepaintings /your/project/skills/cavepaintings
+ln -s /path/to/cavepaintings/skills/cavepaintings-stop /your/project/skills/cavepaintings-stop
 ```
 
 ## Usage with Claude Code
@@ -157,7 +123,9 @@ Browser Canvas  --WebSocket-->  Node.js Server  --files-->  Claude Code
 - **server.js** -- HTTP static file server + WebSocket, state file lifecycle, cross-platform browser opening
 - **app.js** -- Fabric.js canvas with all drawing tools, properties, undo/redo, export/import, WebSocket client
 - **index.html + style.css** -- dark-themed UI with left toolbar, floating properties panel, bottom submit bar
-- **skills/** -- Claude Code skill definitions (start/stop pair)
+- **skills/cavepaintings/** -- start skill with SKILL.md + utility scripts (session check, server start)
+- **skills/cavepaintings-stop/** -- stop skill with SKILL.md + stop script
+- **.claude-plugin/** -- plugin metadata for marketplace installation
 
 ## Running Tests
 

@@ -1,0 +1,15 @@
+{
+  "name": "cavepaintings-marketplace",
+  "description": "Marketplace for Cavepaintings drawing canvas plugin",
+  "owner": {
+    "name": "RCellar"
+  },
+  "plugins": [
+    {
+      "name": "cavepaintings",
+      "description": "Browser-based drawing canvas for diagramming, annotating images, and submitting visuals to Claude Code",
+      "version": "0.1.0",
+      "source": "./"
+    }
+  ]
+}
