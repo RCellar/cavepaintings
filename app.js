@@ -14,6 +14,7 @@ let shapeOrigin = null;
 let activeShape = null;
 let undoStack = [];
 let redoStack = [];
+let isLoadingState = false;
 let canvasDirty = false;
 let gridVisible = false;
 let gridPattern = null;
@@ -370,6 +371,7 @@ function setupCanvasEvents() {
 // Undo / Redo
 // ---------------------------------------------------------------------------
 function saveState() {
+  if (isLoadingState) return;
   try {
     const json = JSON.stringify(canvas.toJSON());
     undoStack.push(json);
@@ -386,14 +388,22 @@ function undo() {
   const current = undoStack.pop();
   redoStack.push(current);
   const previous = undoStack[undoStack.length - 1];
-  canvas.loadFromJSON(JSON.parse(previous), () => canvas.renderAll());
+  isLoadingState = true;
+  canvas.loadFromJSON(JSON.parse(previous), () => {
+    canvas.renderAll();
+    isLoadingState = false;
+  });
 }
 
 function redo() {
   if (redoStack.length === 0) return;
   const next = redoStack.pop();
   undoStack.push(next);
-  canvas.loadFromJSON(JSON.parse(next), () => canvas.renderAll());
+  isLoadingState = true;
+  canvas.loadFromJSON(JSON.parse(next), () => {
+    canvas.renderAll();
+    isLoadingState = false;
+  });
 }
 
 // ---------------------------------------------------------------------------
