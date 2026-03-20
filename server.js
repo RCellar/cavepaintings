@@ -36,6 +36,38 @@ function setSecurityHeaders(res) {
   }
 }
 
+const rateLimits = {
+  'POST /api/canvas': { max: 30, windowMs: 60000 },
+  'GET /api/submissions': { max: 60, windowMs: 60000 },
+  'GET /api/info': { max: 60, windowMs: 60000 },
+};
+
+const rateLimitStore = new Map();
+
+function checkRateLimit(req, res) {
+  const ip = req.socket.remoteAddress || 'unknown';
+  const endpoint = `${req.method} ${new URL(req.url, 'http://localhost').pathname}`;
+  const limit = rateLimits[endpoint];
+  if (!limit) return true;
+
+  const key = `${ip}:${endpoint}`;
+  const now = Date.now();
+  let timestamps = rateLimitStore.get(key) || [];
+  timestamps = timestamps.filter(t => now - t < limit.windowMs);
+
+  if (timestamps.length >= limit.max) {
+    const oldestInWindow = timestamps[0];
+    const retryAfter = Math.ceil((oldestInWindow + limit.windowMs - now) / 1000);
+    res.writeHead(429, { 'Content-Type': 'application/json', 'Retry-After': String(retryAfter) });
+    res.end(JSON.stringify({ error: 'Too many requests', retryAfter }));
+    return false;
+  }
+
+  timestamps.push(now);
+  rateLimitStore.set(key, timestamps);
+  return true;
+}
+
 function parseArgs(args) {
   const opts = { port: 9731, open: true };
   for (let i = 0; i < args.length; i++) {
@@ -234,6 +266,7 @@ function handleApi(req, res) {
 const opts = parseArgs(process.argv.slice(2));
 const server = http.createServer((req, res) => {
   setSecurityHeaders(res);
+  if (req.url?.startsWith('/api/') && !checkRateLimit(req, res)) return;
   if (req.url?.startsWith('/api/')) {
     return handleApi(req, res);
   }
@@ -343,10 +376,18 @@ tryListen(opts.port)
     });
     wss.on('connection', (socket) => {
       activeSocket = socket;
+      let wsMessageTimestamps = [];
       socket.on('close', () => {
         if (activeSocket === socket) activeSocket = null;
       });
       socket.on('message', async (raw) => {
+        const now = Date.now();
+        wsMessageTimestamps = wsMessageTimestamps.filter(t => now - t < 60000);
+        if (wsMessageTimestamps.length >= 100) {
+          socket.close(1008, 'Rate limit exceeded');
+          return;
+        }
+        wsMessageTimestamps.push(now);
         try {
           const msg = JSON.parse(raw.toString());
           if (msg.type === 'submit') {

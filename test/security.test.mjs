@@ -213,6 +213,36 @@ describe('WebSocket Origin Checking', () => {
   });
 });
 
+describe('Rate Limiting', () => {
+  let proc;
+  const PORT = 19754;
+
+  before(async () => {
+    proc = spawn('node', ['server.js', '--port', String(PORT), '--no-open'], {
+      cwd: ROOT,
+      env: { ...process.env, CAVEPAINTINGS_NO_STATE: '1' },
+    });
+    await new Promise((resolve) => {
+      proc.stdout.on('data', (data) => {
+        if (data.toString().includes('listening')) resolve();
+      });
+      setTimeout(resolve, 2000);
+    });
+  });
+
+  after(() => { proc?.kill(); });
+
+  it('returns 429 after exceeding rate limit on /api/info', async () => {
+    const results = [];
+    for (let i = 0; i < 65; i++) {
+      results.push(await fetch(`http://localhost:${PORT}/api/info`));
+    }
+    const blocked = results.filter(r => r.status === 429);
+    assert.ok(blocked.length > 0, 'Expected at least one 429 response');
+    assert.ok(blocked[0].headers['retry-after'], 'Missing Retry-After header');
+  });
+});
+
 describe('File Permissions', () => {
   let proc;
   const PORT = 19753;
