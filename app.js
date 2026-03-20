@@ -58,6 +58,7 @@ function initCanvas() {
   setupBrushPanel();
   setupKeyboard();
   setupAutoSave();
+  setupDragDrop();
   restoreFromLocalStorage();
   restoreTheme();
   connectWebSocket();
@@ -639,14 +640,40 @@ function downloadFile(url, filename, revoke = false) {
   if (revoke) setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
-function addImageFromDataUrl(dataUrl) {
+function addImageFromDataUrl(dataUrl, left, top) {
   fabric.FabricImage.fromURL(dataUrl).then(img => {
     img.scaleToWidth(Math.min(img.width, canvas.getWidth() / 2));
-    img.set({ left: 60, top: 60 });
+    img.set({ left: left ?? 60, top: top ?? 60 });
     canvas.add(img);
     canvas.setActiveObject(img);
     canvas.renderAll();
     saveState();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Drag and drop images
+// ---------------------------------------------------------------------------
+function setupDragDrop() {
+  const target = canvas.upperCanvasEl;
+
+  target.addEventListener('dragover', (e) => {
+    e.preventDefault();
+  });
+
+  target.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const files = e.dataTransfer?.files;
+    if (!files) return;
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        const point = canvas.getScenePoint(e);
+        const reader = new FileReader();
+        reader.onload = (ev) => addImageFromDataUrl(ev.target.result, point.x, point.y);
+        reader.readAsDataURL(file);
+        break;
+      }
+    }
   });
 }
 
