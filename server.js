@@ -8,6 +8,9 @@ import { WebSocketServer } from 'ws';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const SUBMISSIONS_DIR = path.join(os.tmpdir(), 'cavepaintings', 'submissions');
+const STATE_DIR = path.join(os.tmpdir(), 'cavepaintings');
+const STATE_FILE = path.join(STATE_DIR, 'state.json');
+const noState = !!process.env.CAVEPAINTINGS_NO_STATE;
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -47,10 +50,27 @@ function serveStatic(req, res) {
 const opts = parseArgs(process.argv.slice(2));
 const server = http.createServer(serveStatic);
 
+function shutdown() {
+  if (!noState && fs.existsSync(STATE_FILE)) {
+    try { fs.rmSync(STATE_FILE); } catch (e) { /* ignore */ }
+  }
+  if (wss) wss.close();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 1000);
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+
 function listen(port, maxRetries = 10) {
   server.listen(port, () => {
     opts.port = port;
-    console.log(`listening on http://localhost:${port}`);
+    const url = `http://localhost:${port}`;
+    console.log(`listening on ${url}`);
+    if (!noState) {
+      fs.mkdirSync(STATE_DIR, { recursive: true });
+      fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url }, null, 2));
+    }
   });
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE' && maxRetries > 0) {
