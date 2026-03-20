@@ -34,9 +34,9 @@ fi
 echo "=== Releasing cavepaintings v$NEW_VERSION ==="
 echo ""
 
-# Step 1: Bump version in all files
+# Step 1: Bump version in all files (skip cache refresh — we do it after push)
 echo "1. Bumping version..."
-bash "$SCRIPT_DIR/bump-version.sh" "$NEW_VERSION"
+CAVEPAINTINGS_SKIP_CACHE_REFRESH=1 bash "$SCRIPT_DIR/bump-version.sh" "$NEW_VERSION"
 echo ""
 
 # Step 2: Commit
@@ -51,10 +51,22 @@ echo "3. Pushing..."
 git push --quiet
 echo "   Pushed"
 
-# Step 4: Clean old versions from plugin cache
+# Step 4: Refresh marketplace cache AFTER push so it gets the new version
+MARKETPLACE_CACHE="$HOME/.claude/plugins/marketplaces/cavepaintings-marketplace"
+if [[ -d "$MARKETPLACE_CACHE/.git" ]]; then
+  echo "4. Refreshing marketplace cache..."
+  git -C "$MARKETPLACE_CACHE" fetch --quiet origin
+  git -C "$MARKETPLACE_CACHE" reset --quiet --hard origin/HEAD \
+    || git -C "$MARKETPLACE_CACHE" reset --quiet --hard origin/master
+  echo "   Cache updated"
+else
+  echo "4. No marketplace cache found (skipping)"
+fi
+
+# Step 5: Clean old versions from plugin cache
 PLUGIN_CACHE="$HOME/.claude/plugins/cache/cavepaintings-marketplace/cavepaintings"
 if [[ -d "$PLUGIN_CACHE" ]]; then
-  echo "4. Cleaning old plugin cache versions..."
+  echo "5. Cleaning old plugin cache versions..."
   for dir in "$PLUGIN_CACHE"/*/; do
     version="$(basename "$dir")"
     if [[ "$version" != "$NEW_VERSION" && -d "$dir" ]]; then
