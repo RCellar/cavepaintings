@@ -100,18 +100,24 @@ let wss;
 
 function tryListen(port, maxRetries = 10) {
   return new Promise((resolve, reject) => {
+    let settled = false;
     const onError = (err) => {
+      if (settled) return;
       if (err.code === 'EADDRINUSE' && maxRetries > 0) {
+        settled = true;
         console.log(`Port ${port} in use, trying ${port + 1}...`);
         server.close(() => {
           tryListen(port + 1, maxRetries - 1).then(resolve, reject);
         });
       } else {
+        settled = true;
         reject(err);
       }
     };
     server.once('error', onError);
     server.listen(port, () => {
+      if (settled) return; // stale callback from a closed listen attempt
+      settled = true;
       server.removeListener('error', onError);
       resolve(port);
     });
