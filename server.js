@@ -102,6 +102,7 @@ function shutdown() {
   if (!noState && fs.existsSync(STATE_FILE)) {
     try { fs.rmSync(STATE_FILE); } catch (e) { /* ignore */ }
   }
+  try { fs.rmSync(SUBMISSIONS_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
   if (wss) wss.close();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1000);
@@ -163,7 +164,7 @@ tryListen(opts.port)
     const url = `http://localhost:${port}`;
     console.log(`listening on ${url}`);
 
-    wss = new WebSocketServer({ server });
+    wss = new WebSocketServer({ server, maxPayload: 50 * 1024 * 1024 });
     wss.on('connection', (socket) => {
       socket.on('message', (raw) => {
         try {
