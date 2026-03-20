@@ -284,6 +284,17 @@ async function handleSubmission(msg) {
   }, null, 2));
 }
 
+function verifyOrigin(origin) {
+  if (!origin) return true; // non-browser clients
+  try {
+    const url = new URL(origin);
+    const host = url.hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+  } catch {
+    return false;
+  }
+}
+
 let wss;
 let activeSocket = null;
 
@@ -319,7 +330,17 @@ tryListen(opts.port)
     const url = `http://localhost:${port}`;
     console.log(`listening on ${url}`);
 
-    wss = new WebSocketServer({ server, maxPayload: 50 * 1024 * 1024 });
+    wss = new WebSocketServer({
+      server,
+      maxPayload: 50 * 1024 * 1024,
+      verifyClient: (info, cb) => {
+        if (verifyOrigin(info.origin)) {
+          cb(true);
+        } else {
+          cb(false, 403, 'Forbidden: invalid origin');
+        }
+      },
+    });
     wss.on('connection', (socket) => {
       activeSocket = socket;
       socket.on('close', () => {

@@ -4,6 +4,7 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import WebSocket from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -151,5 +152,61 @@ describe('Input Validation — POST /api/canvas', () => {
   it('accepts valid payload (returns 503 with no browser — expected)', async () => {
     const res = await post({ diagram: { objects: [{ type: 'rect' }] }, mode: 'merge' });
     assert.ok(res.status === 503 || res.status === 200, `Expected 503 or 200, got ${res.status}`);
+  });
+});
+
+describe('WebSocket Origin Checking', () => {
+  let proc;
+  const PORT = 19752;
+
+  before(async () => {
+    proc = spawn('node', ['server.js', '--port', String(PORT), '--no-open'], {
+      cwd: ROOT,
+      env: { ...process.env, CAVEPAINTINGS_NO_STATE: '1' },
+    });
+    await new Promise((resolve) => {
+      proc.stdout.on('data', (data) => {
+        if (data.toString().includes('listening')) resolve();
+      });
+      setTimeout(resolve, 2000);
+    });
+  });
+
+  after(() => { proc?.kill(); });
+
+  it('accepts connections from http://localhost origin', async () => {
+    const ws = new WebSocket(`ws://localhost:${PORT}`, { headers: { Origin: `http://localhost:${PORT}` } });
+    await new Promise((resolve, reject) => {
+      ws.on('open', resolve);
+      ws.on('error', reject);
+    });
+    ws.close();
+  });
+
+  it('accepts connections from http://127.0.0.1 origin', async () => {
+    const ws = new WebSocket(`ws://localhost:${PORT}`, { headers: { Origin: 'http://127.0.0.1:9999' } });
+    await new Promise((resolve, reject) => {
+      ws.on('open', resolve);
+      ws.on('error', reject);
+    });
+    ws.close();
+  });
+
+  it('accepts connections with no Origin header (non-browser clients)', async () => {
+    const ws = new WebSocket(`ws://localhost:${PORT}`, { headers: {} });
+    await new Promise((resolve, reject) => {
+      ws.on('open', resolve);
+      ws.on('error', reject);
+    });
+    ws.close();
+  });
+
+  it('rejects connections from foreign origins', async () => {
+    const ws = new WebSocket(`ws://localhost:${PORT}`, { headers: { Origin: 'http://evil.com' } });
+    await new Promise((resolve, reject) => {
+      ws.on('error', () => resolve('rejected'));
+      ws.on('unexpected-response', () => resolve('rejected'));
+      ws.on('open', () => reject(new Error('Should not have connected')));
+    });
   });
 });
