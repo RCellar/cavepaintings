@@ -14,6 +14,7 @@ let shapeOrigin = null;
 let activeShape = null;
 let undoStack = [];
 let redoStack = [];
+let canvasDirty = false;
 let gridVisible = false;
 let gridPattern = null;
 let autoSaveTimer = null;
@@ -372,6 +373,7 @@ function saveState() {
     undoStack.push(json);
     if (undoStack.length > 50) undoStack.shift();
     redoStack = [];
+    persistCanvas(json);
   } catch (err) {
     console.warn('Failed to save canvas state:', err);
   }
@@ -710,15 +712,22 @@ function setupKeyboard() {
 // Auto-save / restore
 // ---------------------------------------------------------------------------
 function setupAutoSave() {
-  autoSaveTimer = setInterval(() => persistCanvas(), 30000);
-  canvas.on('object:modified', persistCanvas);
-  canvas.on('object:added', persistCanvas);
-  canvas.on('object:removed', persistCanvas);
-  canvas.on('path:created', persistCanvas);
+  canvas.on('object:modified', () => { canvasDirty = true; });
+  canvas.on('object:added', () => { canvasDirty = true; });
+  canvas.on('object:removed', () => { canvasDirty = true; });
+  canvas.on('path:created', () => { canvasDirty = true; });
+
+  autoSaveTimer = setInterval(() => {
+    if (canvasDirty) persistCanvas();
+  }, 30000);
 }
 
-function persistCanvas() {
-  localStorage.setItem('cavepaintings-canvas', JSON.stringify(canvas.toJSON()));
+function persistCanvas(json) {
+  try {
+    if (!json) json = JSON.stringify(canvas.toJSON());
+    localStorage.setItem('cavepaintings-canvas', json);
+  } catch { /* quota exceeded — silently ignore */ }
+  canvasDirty = false;
 }
 
 function restoreFromLocalStorage() {
