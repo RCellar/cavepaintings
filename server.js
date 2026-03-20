@@ -44,6 +44,19 @@ const rateLimits = {
 
 const rateLimitStore = new Map();
 
+// Periodic cleanup of expired rate limit entries (every 2 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamps] of rateLimitStore.entries()) {
+    const filtered = timestamps.filter(t => now - t < 60000);
+    if (filtered.length === 0) {
+      rateLimitStore.delete(key);
+    } else {
+      rateLimitStore.set(key, filtered);
+    }
+  }
+}, 120000).unref();
+
 function checkRateLimit(req, res) {
   const ip = req.socket.remoteAddress || 'unknown';
   const endpoint = `${req.method} ${new URL(req.url, 'http://localhost').pathname}`;
