@@ -39,14 +39,20 @@ if ! command -v node &>/dev/null; then
   exit 1
 fi
 
-# Kill existing session if running
+# Check for existing running session — reuse if alive
 STATE_FILE="$(node -e "const os=require('os'),p=require('path');console.log(p.join(os.tmpdir(),'cavepaintings','state.json'))")"
 if [[ -f "$STATE_FILE" ]]; then
   OLD_PID="$(node -e "console.log(JSON.parse(require('fs').readFileSync('$STATE_FILE','utf8')).pid)")"
   if kill -0 "$OLD_PID" 2>/dev/null; then
-    kill "$OLD_PID" 2>/dev/null
-    sleep 0.5
+    # Server is already running — return existing session info
+    node -e "
+      const state = JSON.parse(require('fs').readFileSync('$STATE_FILE','utf8'));
+      state.status = 'existing';
+      console.log(JSON.stringify(state));
+    "
+    exit 0
   fi
+  # Stale state file — clean up and start fresh
   rm -f "$STATE_FILE"
 fi
 

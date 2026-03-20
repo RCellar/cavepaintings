@@ -17,6 +17,20 @@ let redoStack = [];
 let gridVisible = false;
 let gridPattern = null;
 let autoSaveTimer = null;
+let brushColor = '#4a9eff';
+let brushWidth = 3;
+let currentTheme = 'dark';
+
+const themes = {
+  dark: {
+    canvasBg: '#1a1a2e',
+    gridDotColor: 'rgba(74,158,255,0.25)',
+  },
+  light: {
+    canvasBg: '#f0f0f0',
+    gridDotColor: 'rgba(0,0,0,0.15)',
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Canvas initialisation
@@ -37,9 +51,11 @@ function initCanvas() {
   setupCanvasEvents();
   setupToolbar();
   setupProperties();
+  setupBrushPanel();
   setupKeyboard();
   setupAutoSave();
   restoreFromLocalStorage();
+  restoreTheme();
   connectWebSocket();
 }
 
@@ -64,14 +80,30 @@ function setTool(tool) {
 
   if (tool === 'select') {
     canvas.selection = true;
+    canvas.skipTargetFind = false;
     canvas.defaultCursor = 'default';
     canvas.hoverCursor = 'move';
   } else {
     canvas.selection = false;
+    canvas.skipTargetFind = true;
     canvas.defaultCursor = 'crosshair';
     canvas.hoverCursor = 'crosshair';
     canvas.discardActiveObject();
     canvas.renderAll();
+  }
+
+  if (tool === 'draw') {
+    if (!canvas.freeDrawingBrush) {
+      canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
+    }
+    canvas.freeDrawingBrush.color = brushColor;
+    canvas.freeDrawingBrush.width = brushWidth;
+  }
+
+  // Show/hide brush panel
+  const brushPanel = document.getElementById('brush-panel');
+  if (brushPanel) {
+    brushPanel.classList.toggle('hidden', tool !== 'draw');
   }
 
   document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
@@ -330,27 +362,31 @@ function redo() {
 // ---------------------------------------------------------------------------
 // Grid
 // ---------------------------------------------------------------------------
+function buildGridPattern(colors) {
+  const gridSize = 24;
+  const patternCanvas = document.createElement('canvas');
+  patternCanvas.width = gridSize;
+  patternCanvas.height = gridSize;
+  const ctx = patternCanvas.getContext('2d');
+  ctx.fillStyle = colors.canvasBg;
+  ctx.fillRect(0, 0, gridSize, gridSize);
+  ctx.fillStyle = colors.gridDotColor;
+  ctx.beginPath();
+  ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  gridPattern = new fabric.Pattern({ source: patternCanvas, repeat: 'repeat' });
+  canvas.backgroundColor = gridPattern;
+}
+
 function toggleGrid() {
   gridVisible = !gridVisible;
   document.getElementById('btn-grid').classList.toggle('active', gridVisible);
 
   if (gridVisible) {
-    const gridSize = 24;
-    const patternCanvas = document.createElement('canvas');
-    patternCanvas.width = gridSize;
-    patternCanvas.height = gridSize;
-    const ctx = patternCanvas.getContext('2d');
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(0, 0, gridSize, gridSize);
-    ctx.fillStyle = 'rgba(74,158,255,0.25)';
-    ctx.beginPath();
-    ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    gridPattern = new fabric.Pattern({ source: patternCanvas, repeat: 'repeat' });
-    canvas.backgroundColor = gridPattern;
+    buildGridPattern(themes[currentTheme]);
   } else {
-    canvas.backgroundColor = '#1a1a2e';
+    canvas.backgroundColor = themes[currentTheme].canvasBg;
   }
   canvas.renderAll();
 }
@@ -429,6 +465,58 @@ function setupProperties() {
 }
 
 // ---------------------------------------------------------------------------
+// Brush customization
+// ---------------------------------------------------------------------------
+function setupBrushPanel() {
+  const colorInput = document.getElementById('brush-color');
+  const widthInput = document.getElementById('brush-width');
+
+  if (colorInput) {
+    colorInput.addEventListener('input', function () {
+      brushColor = this.value;
+      if (canvas.freeDrawingBrush) canvas.freeDrawingBrush.color = brushColor;
+    });
+  }
+
+  if (widthInput) {
+    widthInput.addEventListener('input', function () {
+      brushWidth = parseInt(this.value, 10);
+      if (canvas.freeDrawingBrush) canvas.freeDrawingBrush.width = brushWidth;
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Theme
+// ---------------------------------------------------------------------------
+function setTheme(theme) {
+  currentTheme = theme;
+  document.body.dataset.theme = theme;
+  const colors = themes[theme];
+
+  if (gridVisible) {
+    buildGridPattern(colors);
+  } else {
+    canvas.backgroundColor = colors.canvasBg;
+  }
+  canvas.renderAll();
+  localStorage.setItem('cavepaintings-theme', theme);
+}
+
+function toggleTheme() {
+  setTheme(currentTheme === 'dark' ? 'light' : 'dark');
+}
+
+function restoreTheme() {
+  const saved = localStorage.getItem('cavepaintings-theme');
+  if (saved && themes[saved]) {
+    setTheme(saved);
+  } else {
+    document.body.dataset.theme = 'dark';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Toolbar wiring
 // ---------------------------------------------------------------------------
 function setupToolbar() {
@@ -443,7 +531,7 @@ function setupToolbar() {
   document.getElementById('btn-clear').addEventListener('click', () => {
     if (confirm('Clear the canvas? This cannot be undone.')) {
       canvas.clear();
-      canvas.backgroundColor = gridVisible ? gridPattern : '#1a1a2e';
+      canvas.backgroundColor = gridVisible ? gridPattern : themes[currentTheme].canvasBg;
       canvas.renderAll();
       undoStack = [];
       redoStack = [];
@@ -451,6 +539,9 @@ function setupToolbar() {
       localStorage.removeItem('cavepaintings-canvas');
     }
   });
+
+  const themeBtn = document.getElementById('btn-theme');
+  if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
 
   document.getElementById('btn-export-png').addEventListener('click', () => {
     downloadFile(canvas.toDataURL({ format: 'png', multiplier: 1 }), 'cavepaintings.png');

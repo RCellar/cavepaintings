@@ -78,9 +78,8 @@ body {
   display: block;
 }
 
-#properties-panel {
+#properties-panel, #brush-panel {
   position: absolute;
-  top: 12px;
   right: 12px;
   width: 180px;
   background: #16213e;
@@ -90,7 +89,10 @@ body {
   z-index: 10;
 }
 
-#properties-panel.hidden {
+#properties-panel { top: 12px; }
+#brush-panel { top: 12px; }
+
+#properties-panel.hidden, #brush-panel.hidden {
   display: none;
 }
 
@@ -220,4 +222,90 @@ body {
 
 #btn-submit:not(:disabled):hover {
   opacity: 0.9;
+}
+
+/* Light theme */
+[data-theme="light"] body,
+body[data-theme="light"] {
+  background: #f0f0f0;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] #toolbar,
+body[data-theme="light"] #toolbar {
+  background: #e0e0e8;
+  border-right-color: #c0c0d0;
+}
+
+[data-theme="light"] #properties-panel,
+[data-theme="light"] #brush-panel,
+body[data-theme="light"] #properties-panel,
+body[data-theme="light"] #brush-panel {
+  background: #e0e0e8;
+  border-color: #c0c0d0;
+}
+
+[data-theme="light"] .tool-btn,
+body[data-theme="light"] .tool-btn {
+  color: #505068;
+}
+
+[data-theme="light"] .tool-btn:hover,
+body[data-theme="light"] .tool-btn:hover {
+  background: #d0d0d8;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .tool-btn.active,
+body[data-theme="light"] .tool-btn.active {
+  background: #d0d0d8;
+  border-color: #e94560;
+  color: #e94560;
+}
+
+[data-theme="light"] .tool-separator,
+body[data-theme="light"] .tool-separator {
+  background: #c0c0d0;
+}
+
+[data-theme="light"] #bottom-bar,
+body[data-theme="light"] #bottom-bar {
+  background: #e0e0e8;
+  border-top-color: #c0c0d0;
+}
+
+[data-theme="light"] #prompt-input,
+body[data-theme="light"] #prompt-input {
+  background: #ffffff;
+  border-color: #c0c0d0;
+  color: #1a1a2e;
+}
+
+[data-theme="light"] #prompt-input::placeholder,
+body[data-theme="light"] #prompt-input::placeholder {
+  color: #909098;
+}
+
+[data-theme="light"] .prop-row label,
+body[data-theme="light"] .prop-row label {
+  color: #505068;
+}
+
+[data-theme="light"] .prop-row input[type="color"],
+body[data-theme="light"] .prop-row input[type="color"] {
+  background: #ffffff;
+  border-color: #c0c0d0;
+}
+
+[data-theme="light"] .prop-actions button,
+body[data-theme="light"] .prop-actions button {
+  background: #d0d0d8;
+  border-color: #c0c0d0;
+  color: #505068;
+}
+
+[data-theme="light"] .prop-actions button:hover,
+body[data-theme="light"] .prop-actions button:hover {
+  background: #c0c0d0;
+  color: #1a1a2e;
 }
