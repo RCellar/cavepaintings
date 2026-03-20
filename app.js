@@ -22,6 +22,7 @@ let brushColor = '#4a9eff';
 let brushWidth = 3;
 let clipboardObject = null;
 let currentTheme = 'dark';
+let pendingSubmitTimer = null;
 
 const themes = {
   dark: {
@@ -773,7 +774,13 @@ function connectWebSocket() {
   ws.addEventListener('message', (event) => {
     try {
       const msg = JSON.parse(event.data);
-      console.log('WS message:', msg);
+      if (msg.type === 'ack') {
+        if (pendingSubmitTimer) {
+          clearTimeout(pendingSubmitTimer);
+          pendingSubmitTimer = null;
+        }
+        showSubmitFeedback();
+      }
     } catch (_) {}
   });
 }
@@ -810,6 +817,8 @@ function submitToClaude() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
   const promptInput = document.getElementById('prompt-input');
+  const btn = document.getElementById('btn-submit');
+
   let payload;
   try {
     payload = {
@@ -823,20 +832,35 @@ function submitToClaude() {
     return;
   }
 
+  // Show sending state
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
   ws.send(JSON.stringify(payload));
-  showSubmitFeedback();
+
+  // Timeout: if no ack in 10s, show failure
+  pendingSubmitTimer = setTimeout(() => {
+    pendingSubmitTimer = null;
+    btn.textContent = 'Send failed';
+    btn.style.background = '#e94560';
+    setTimeout(() => {
+      btn.textContent = 'Submit to Claude';
+      btn.style.background = '';
+      btn.disabled = false;
+    }, 2000);
+  }, 10000);
 }
 
 function showSubmitFeedback() {
   const btn = document.getElementById('btn-submit');
   const promptInput = document.getElementById('prompt-input');
-  const original = btn.textContent;
   btn.style.background = '#50c878';
   btn.textContent = 'Sent!';
   promptInput.value = '';
   setTimeout(() => {
     btn.style.background = '';
-    btn.textContent = original;
+    btn.textContent = 'Submit to Claude';
+    btn.disabled = false;
   }, 1500);
 }
 

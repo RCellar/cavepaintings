@@ -1,11 +1,6 @@
 #!/usr/bin/env node
 // UserPromptSubmit hook: check for new cavepaintings submissions and notify Claude.
-// Fires when the user sends any message, injecting canvas context before Claude responds.
-// Tracks last-seen submission to avoid duplicate notifications.
-//
-// Previously used PostToolUse, but that only fires during active tool work —
-// it can't notify an idle session. UserPromptSubmit fires on any user input,
-// so the user just needs to type anything (e.g. "check") after submitting.
+// Tracks last-seen submission timestamp to surface ALL new submissions (not just newest).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,52 +10,82 @@ const submissionsDir = path.join(os.tmpdir(), 'cavepaintings', 'submissions');
 const stateFile = path.join(os.tmpdir(), 'cavepaintings', 'state.json');
 const lastSeenFile = path.join(os.tmpdir(), 'cavepaintings', '.last-seen-submission');
 
-// Only run if cavepaintings server is active
-if (!fs.existsSync(stateFile)) {
-  process.exit(0);
-}
-
-if (!fs.existsSync(submissionsDir)) {
+if (!fs.existsSync(stateFile) || !fs.existsSync(submissionsDir)) {
   process.exit(0);
 }
 
 const jsonFiles = fs.readdirSync(submissionsDir)
   .filter(f => f.endsWith('.json'))
-  .sort()
-  .reverse();
+  .sort();
 
 if (jsonFiles.length === 0) {
   process.exit(0);
 }
 
-const newest = jsonFiles[0];
-
-// Check if we already notified about this submission
-let lastSeen = '';
+let lastSeenTimestamp = 0;
 try {
-  lastSeen = fs.readFileSync(lastSeenFile, 'utf8').trim();
+  lastSeenTimestamp = parseInt(fs.readFileSync(lastSeenFile, 'utf8').trim(), 10) || 0;
 } catch {
   // No last-seen file yet
 }
 
-if (newest === lastSeen) {
+function extractTimestamp(filename) {
+  const match = filename.match(/submission-(\d+)\.json$/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+const newSubmissions = jsonFiles
+  .filter(f => extractTimestamp(f) > lastSeenTimestamp)
+  .sort((a, b) => extractTimestamp(a) - extractTimestamp(b));
+
+if (newSubmissions.length === 0) {
   process.exit(0);
 }
 
-// New submission found — mark as seen and notify
-fs.writeFileSync(lastSeenFile, newest);
+const newestTimestamp = extractTimestamp(newSubmissions[newSubmissions.length - 1]);
+fs.writeFileSync(lastSeenFile, String(newestTimestamp));
 
-const jsonPath = path.join(submissionsDir, newest);
-const pngPath = jsonPath.replace(/\.json$/, '.png');
-const submission = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+const entries = [];
+for (const file of newSubmissions) {
+  const jsonPath = path.join(submissionsDir, file);
+  const pngPath = jsonPath.replace(/\.json$/, '.png');
+  const submission = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
-const prompt = submission.prompt
-  ? `User message: "${submission.prompt}"`
-  : 'No message included.';
+  const prompt = submission.prompt ? `"${submission.prompt}"` : '(no message)';
+  const pngExists = fs.existsSync(pngPath);
+
+  let canvasInfo = '';
+  if (submission.diagram && submission.diagram.objects) {
+    const objects = submission.diagram.objects;
+    const typeCounts = {};
+    for (const obj of objects) {
+      const t = obj.type || 'unknown';
+      typeCounts[t] = (typeCounts[t] || 0) + 1;
+    }
+    const summary = Object.entries(typeCounts).map(([t, c]) => `${c} ${t}`).join(', ');
+    canvasInfo = `, ${objects.length} objects (${summary})`;
+  }
+
+  let entry = `${prompt}`;
+  if (pngExists) entry += ` — PNG: ${pngPath}`;
+  entry += ` — JSON: ${jsonPath}`;
+  if (canvasInfo) entry += canvasInfo;
+  entries.push(entry);
+}
+
+const header = newSubmissions.length === 1
+  ? '[Cavepaintings Submission]'
+  : `[Cavepaintings: ${newSubmissions.length} new submissions]`;
+
+const body = entries.length === 1
+  ? `${header} ${entries[0]}`
+  : `${header}\n${entries.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
+
+const context = `${body}\n\nRead the PNG file(s) with the Read tool to see the visual content.`;
 
 console.log(JSON.stringify({
   hookSpecificOutput: {
     hookEventName: 'UserPromptSubmit',
-    additionalContext: `[Cavepaintings Submission Received] A new canvas submission arrived. ${prompt} The PNG screenshot is at: ${pngPath} — read it with the Read tool to see the visual. The diagram JSON is at: ${jsonPath}`,
+    additionalContext: context,
   },
 }));
