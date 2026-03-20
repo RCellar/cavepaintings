@@ -2,6 +2,10 @@
 
 A browser-based interactive drawing canvas that integrates with Claude Code. Draw diagrams, paste and annotate images, and submit canvas snapshots directly into your Claude Code conversation over a persistent WebSocket connection.
 
+![Cavepaintings UI](mockup.svg)
+
+*Dark-themed canvas with left toolbar, floating properties panel, zoom indicator, and submit bar. The architecture diagram shows the bidirectional data flow -- submissions go from canvas to Claude, and the push API sends objects back.*
+
 ## Features
 
 - **Drawing tools** -- rectangles, ellipses, arrows, freehand, text, and image paste (Ctrl+V)
@@ -17,6 +21,8 @@ A browser-based interactive drawing canvas that integrates with Claude Code. Dra
 - **Connection status** -- green/red indicator with automatic reconnect (exponential backoff)
 - **Canvas push API** -- Claude (or any harness) can programmatically place objects on the canvas via `POST /api/canvas`
 - **Submissions API** -- harness-agnostic `GET /api/submissions?since=<timestamp>` endpoint for polling new submissions
+- **Dark/Light theme** -- toggle between dark and light themes, persists across sessions
+- **Accessibility** -- aria-labels on all controls, label associations, aria-pressed states
 
 ## Quick Start
 
@@ -41,14 +47,14 @@ The server automatically tries the next port if the default is in use.
 
 ## Keyboard Shortcuts
 
-| Key | Tool |
-|-----|------|
-| V | Select |
-| R | Rectangle |
-| E | Ellipse |
-| A | Arrow |
+| Key | Action |
+|-----|--------|
+| V | Select tool |
+| R | Rectangle tool |
+| E | Ellipse tool |
+| A | Arrow tool |
 | D | Freehand draw |
-| T | Text |
+| T | Text tool |
 | I | Image (file picker) |
 | G | Toggle grid |
 | Ctrl+C | Copy selected object(s) |
@@ -56,8 +62,9 @@ The server automatically tries the next port if the default is in use.
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
 | Ctrl+Enter | Submit to Claude (when prompt field is focused) |
-| Delete | Remove selected |
+| Delete | Remove selected object(s) |
 | Alt+Drag | Pan canvas |
+| Scroll wheel | Zoom in/out (centered on cursor) |
 
 ## Installing as a Claude Code Plugin
 
@@ -92,7 +99,7 @@ Or ask Claude Code directly:
 
 > "Add `RCellar/cavepaintings` as a custom marketplace called `cavepaintings-marketplace`"
 
-**3. Install the plugin**
+**2. Install the plugin**
 
 In Claude Code, run:
 
@@ -133,54 +140,91 @@ The canvas opens in your browser. Draw, paste screenshots, annotate -- then clic
 
 The hook tracks submissions by timestamp and surfaces all new submissions since the last check, so rapid double-submits are never lost.
 
+### Claude drawing on the canvas
+
+Claude can push Fabric.js objects directly to your canvas using the REST API:
+
+```bash
+# Claude runs this via the Bash tool
+curl -s -X POST http://localhost:9731/api/canvas \
+  -H 'Content-Type: application/json' \
+  -d '{"diagram":{"objects":[
+    {"type":"rect","left":50,"top":50,"width":200,"height":100,"fill":"#4a9eff","stroke":"#fff","strokeWidth":2},
+    {"type":"i-text","left":70,"top":80,"text":"Hello from Claude","fill":"#fff","fontSize":16}
+  ]},"mode":"merge"}'
+```
+
+Objects appear on the canvas in real time. Use `"mode": "merge"` to add to the existing canvas or `"mode": "replace"` to clear and load a new diagram.
+
 ## Architecture
 
 ```
-Browser Canvas  --WebSocket-->  Node.js Server  --files-->  Claude Code
-  (Fabric.js)                   (http + ws)                (skill reads files)
+                    WebSocket (submit)
+Browser Canvas  ─────────────────────────►  Node.js Server  ──files──►  Claude Code
+  (Fabric.js)   ◄─────────────────────────   (http + ws)               (skills + hooks)
+                    WebSocket (load)          REST API
+                                            /api/canvas
+                                            /api/submissions
 ```
 
-- **server.js** -- HTTP static file server + WebSocket + REST API, state file lifecycle, cross-platform browser opening
+- **server.js** -- HTTP static file server + WebSocket + REST API, async submission I/O, state file lifecycle, cross-platform browser opening
 - **app.js** -- Fabric.js canvas with all drawing tools, properties, undo/redo, export/import, WebSocket client with ack-based feedback
 - **index.html + style.css** -- dark/light themed UI with left toolbar, floating properties panel, bottom submit bar with zoom indicator
-- **vendor/fabric.min.js** -- locally bundled Fabric.js 6.5.1 (no CDN dependency)
+- **vendor/fabric.min.js** -- locally bundled Fabric.js 6.5.1 (no CDN dependency, works offline)
 - **skills/cavepaintings/** -- start skill with SKILL.md + utility scripts (session check, server start)
 - **skills/cavepaintings-stop/** -- stop skill with SKILL.md + stop script
-- **hooks/** -- `UserPromptSubmit` hook that detects new canvas submissions with multi-submission tracking
+- **hooks/** -- `UserPromptSubmit` hook with multi-submission tracking, `SessionStart` hook for dependency install
 - **.claude-plugin/** -- plugin metadata for marketplace installation
 
 ## REST API
 
 The server exposes two API endpoints for harness-agnostic integration:
 
-**Poll for submissions:**
+### Poll for submissions
+
 ```bash
 curl http://localhost:9731/api/submissions?since=0
 ```
-Returns all submissions newer than the given timestamp, with prompt text, file paths, and metadata.
 
-**Push objects to canvas:**
+Returns all submissions newer than the given timestamp:
+
+```json
+{
+  "submissions": [
+    {
+      "id": "submission-1774030611729",
+      "timestamp": 1774030611729,
+      "prompt": "review this architecture",
+      "png": "/tmp/cavepaintings/submissions/submission-1774030611729.png",
+      "json": "/tmp/cavepaintings/submissions/submission-1774030611729.json"
+    }
+  ]
+}
+```
+
+### Push objects to canvas
+
 ```bash
 curl -X POST http://localhost:9731/api/canvas \
   -H 'Content-Type: application/json' \
   -d '{"diagram":{"objects":[{"type":"rect","left":50,"top":50,"width":100,"height":80,"fill":"#ff0000"}]},"mode":"merge"}'
 ```
-Forwards Fabric.js objects to the connected browser client. Use `"mode": "merge"` to add to existing canvas or `"mode": "replace"` to clear and load.
+
+Forwards Fabric.js objects to the connected browser client. Returns `{"ok":true}` on success or `503` if no browser is connected. Supported object types: `rect`, `ellipse`, `i-text`, `line`, `path`, `group`, `image`.
 
 ## Running Tests
 
 ```bash
-npm test
+npm test                    # 19 node:test tests (server, WS, submissions, lifecycle, API)
+npx playwright test         # 20 Playwright browser tests (tools, copy/paste, zoom, a11y)
 ```
-
-Runs 19 tests across 7 suites (HTTP serving, WebSocket protocol, submission storage, server lifecycle, start-server, end-to-end flow, API endpoints). Playwright browser tests (20 tests) are run separately with `npx playwright test`.
 
 ## Updating
 
 After making changes to the plugin:
 
 ```bash
-npm run release 0.2.0    # bumps version, commits, pushes, cleans old cache versions
+npm run release 0.3.0    # bumps version, commits, pushes, cleans old cache versions
 ```
 
 Then in Claude Code:
@@ -191,6 +235,13 @@ Then in Claude Code:
 ```
 
 Dependencies are installed automatically on session start via a `SessionStart` hook, so users never need to run `npm install` manually.
+
+## Security
+
+- Static file server validates paths against traversal attacks (`../`, encoded variants, malformed URLs)
+- WebSocket messages are limited to 50 MB to prevent memory exhaustion
+- Submission temp files are cleaned up on server shutdown
+- All traffic is localhost-only -- no authentication needed
 
 ## Tech Stack
 
