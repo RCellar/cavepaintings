@@ -4,6 +4,7 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import WebSocket from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -47,5 +48,49 @@ describe('HTTP Server', () => {
   it('returns 404 for unknown paths', async () => {
     const res = await fetch(`http://localhost:${PORT}/nonexistent`);
     assert.strictEqual(res.status, 404);
+  });
+});
+
+describe('WebSocket Server', () => {
+  let proc;
+  const PORT = 19732;
+
+  before(async () => {
+    proc = spawn('node', ['server.js', '--port', String(PORT), '--no-open'], {
+      cwd: ROOT,
+      env: { ...process.env, CAVEPAINTINGS_NO_STATE: '1' },
+    });
+    await new Promise((resolve) => {
+      proc.stdout.on('data', (data) => {
+        if (data.toString().includes('listening')) resolve();
+      });
+      setTimeout(resolve, 2000);
+    });
+  });
+
+  after(() => { proc?.kill(); });
+
+  it('accepts WebSocket connections', async () => {
+    const ws = new WebSocket(`ws://localhost:${PORT}`);
+    await new Promise((resolve, reject) => {
+      ws.on('open', resolve);
+      ws.on('error', reject);
+    });
+    ws.close();
+  });
+
+  it('sends ack on submit message', async () => {
+    const ws = new WebSocket(`ws://localhost:${PORT}`);
+    await new Promise((resolve, reject) => {
+      ws.on('open', resolve);
+      ws.on('error', reject);
+    });
+    const ackPromise = new Promise((resolve) => {
+      ws.on('message', (data) => resolve(JSON.parse(data.toString())));
+    });
+    ws.send(JSON.stringify({ type: 'submit', png: 'data:image/png;base64,abc', diagram: {} }));
+    const ack = await ackPromise;
+    assert.strictEqual(ack.type, 'ack');
+    ws.close();
   });
 });

@@ -2,6 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WebSocketServer } from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -60,6 +61,25 @@ function listen(port, maxRetries = 10) {
   });
 }
 
+function handleSubmission(msg) {}
+
+let wss;
+
 listen(opts.port);
 
-export { server, opts };
+wss = new WebSocketServer({ server });
+wss.on('connection', (socket) => {
+  socket.on('message', (raw) => {
+    try {
+      const msg = JSON.parse(raw.toString());
+      if (msg.type === 'submit') {
+        handleSubmission(msg);
+        socket.send(JSON.stringify({ type: 'ack' }));
+      }
+    } catch (e) {
+      // ignore malformed messages
+    }
+  });
+});
+
+export { server, wss, opts };
