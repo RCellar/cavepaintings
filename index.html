@@ -4,8 +4,110 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cavepaintings</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app">Loading...</div>
+  <div id="app">
+    <!-- Left Toolbar -->
+    <div id="toolbar">
+      <div class="tool-group">
+        <button class="tool-btn active" data-tool="select" title="Select (V)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="rect" title="Rectangle (R)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="ellipse" title="Ellipse (E)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="9" ry="9"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="arrow" title="Arrow (A)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="14 5 19 5 19 10"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="draw" title="Freehand (D)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17c3-3 6 2 9-1s3-6 6-4"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="text" title="Text (T)">
+          <span style="font-weight:bold;font-size:16px">T</span>
+        </button>
+        <button class="tool-btn" data-tool="image" title="Image (I)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        </button>
+      </div>
+      <div class="tool-separator"></div>
+      <div class="tool-group">
+        <button class="tool-btn" id="btn-undo" title="Undo (Ctrl+Z)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        </button>
+        <button class="tool-btn" id="btn-redo" title="Redo (Ctrl+Y)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/></svg>
+        </button>
+        <button class="tool-btn" id="btn-grid" title="Toggle Grid (G)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </button>
+        <button class="tool-btn" id="btn-clear" title="Clear Canvas">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+      <div class="tool-separator"></div>
+      <div class="tool-group">
+        <button class="tool-btn" id="btn-export-png" title="Export PNG">PNG</button>
+        <button class="tool-btn" id="btn-export-svg" title="Export SVG">SVG</button>
+        <button class="tool-btn" id="btn-export-json" title="Export JSON">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </button>
+        <button class="tool-btn" id="btn-import-json" title="Import JSON">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Canvas Area -->
+    <div id="canvas-container">
+      <canvas id="drawing-canvas"></canvas>
+    </div>
+    <!-- Properties Panel (hidden by default) -->
+    <div id="properties-panel" class="hidden">
+      <div class="panel-title">Properties</div>
+      <div class="prop-row">
+        <label>Fill</label>
+        <input type="color" id="prop-fill" value="#4a9eff">
+      </div>
+      <div class="prop-row">
+        <label>Stroke</label>
+        <input type="color" id="prop-stroke" value="#4a9eff">
+      </div>
+      <div class="prop-row">
+        <label>Stroke Width</label>
+        <input type="range" id="prop-stroke-width" min="1" max="20" value="2">
+      </div>
+      <div class="prop-row">
+        <label>Font Size</label>
+        <input type="range" id="prop-font-size" min="8" max="72" value="16">
+      </div>
+      <div class="prop-row">
+        <label>Opacity</label>
+        <input type="range" id="prop-opacity" min="0" max="100" value="100">
+      </div>
+      <div class="prop-actions">
+        <button id="prop-delete" title="Delete">Del</button>
+        <button id="prop-duplicate" title="Duplicate">Dup</button>
+        <button id="prop-forward" title="Bring Forward">↑</button>
+        <button id="prop-backward" title="Send Backward">↓</button>
+      </div>
+    </div>
+    <!-- Bottom Bar -->
+    <div id="bottom-bar">
+      <div id="connection-status">
+        <span id="status-dot" class="disconnected"></span>
+        <span id="status-text">Disconnected</span>
+      </div>
+      <input type="text" id="prompt-input" placeholder="Add a message (optional)...">
+      <button id="btn-submit" disabled>Submit to Claude</button>
+    </div>
+  </div>
+  <!-- Hidden file input for image/json import -->
+  <input type="file" id="file-input-image" accept="image/*" style="display:none">
+  <input type="file" id="file-input-json" accept=".json" style="display:none">
+  <script src="https://cdn.jsdelivr.net/npm/fabric@6.5.1/dist/index.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
