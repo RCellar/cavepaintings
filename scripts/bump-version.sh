@@ -55,4 +55,25 @@ done
 
 echo ""
 echo "Version bumped to $NEW_VERSION"
-echo "Next steps: commit, push, then update the plugin via /plugin"
+
+# Refresh the local marketplace cache if it exists
+MARKETPLACE_NAME="cavepaintings-marketplace"
+MARKETPLACE_CACHE="$HOME/.claude/plugins/marketplaces/$MARKETPLACE_NAME"
+
+if [[ -d "$MARKETPLACE_CACHE/.git" ]]; then
+  echo "Refreshing marketplace cache..."
+  git -C "$MARKETPLACE_CACHE" fetch --quiet origin 2>/dev/null
+  git -C "$MARKETPLACE_CACHE" reset --quiet --hard origin/HEAD 2>/dev/null \
+    || git -C "$MARKETPLACE_CACHE" reset --quiet --hard origin/master 2>/dev/null
+  echo "  $MARKETPLACE_CACHE updated"
+elif [[ -d "$MARKETPLACE_CACHE" ]]; then
+  echo "Warning: marketplace cache exists but is not a git repo: $MARKETPLACE_CACHE"
+  echo "  You may need to manually delete it and re-install the plugin"
+fi
+
+echo ""
+echo "Next steps:"
+echo "  1. git add -A && git commit -m 'chore: bump to $NEW_VERSION'"
+echo "  2. git push"
+echo "  3. /plugin update $MARKETPLACE_NAME"
+echo "  4. /reload-plugins"
