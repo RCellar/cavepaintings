@@ -1,6 +1,6 @@
 {
   "name": "cavepaintings",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "description": "Browser-based drawing canvas for Claude Code",
   "main": "server.js",
