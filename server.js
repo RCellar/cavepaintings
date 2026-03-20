@@ -81,8 +81,81 @@ function serveStatic(req, res) {
   });
 }
 
+function handleApi(req, res) {
+  const parsed = new URL(req.url, 'http://localhost');
+
+  if (req.method === 'GET' && parsed.pathname === '/api/submissions') {
+    const since = parseInt(parsed.searchParams.get('since') || '0', 10);
+    let submissions = [];
+
+    if (fs.existsSync(SUBMISSIONS_DIR)) {
+      const jsonFiles = fs.readdirSync(SUBMISSIONS_DIR)
+        .filter(f => f.endsWith('.json'))
+        .sort();
+
+      for (const file of jsonFiles) {
+        const match = file.match(/submission-(\d+)\.json$/);
+        if (!match) continue;
+        const ts = parseInt(match[1], 10);
+        if (ts <= since) continue;
+
+        const jsonPath = path.join(SUBMISSIONS_DIR, file);
+        const pngPath = jsonPath.replace(/\.json$/, '.png');
+        const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+
+        submissions.push({
+          id: `submission-${ts}`,
+          timestamp: ts,
+          prompt: data.prompt || '',
+          png: fs.existsSync(pngPath) ? pngPath : null,
+          json: jsonPath,
+        });
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ submissions }));
+    return;
+  }
+
+  if (req.method === 'POST' && parsed.pathname === '/api/canvas') {
+    let body = '';
+    req.on('data', (chunk) => body += chunk);
+    req.on('end', () => {
+      if (!activeSocket || activeSocket.readyState !== 1) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No browser client connected' }));
+        return;
+      }
+
+      try {
+        const msg = JSON.parse(body);
+        activeSocket.send(JSON.stringify({
+          type: 'load',
+          diagram: msg.diagram || {},
+          mode: msg.mode || 'merge',
+        }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Not found' }));
+}
+
 const opts = parseArgs(process.argv.slice(2));
-const server = http.createServer(serveStatic);
+const server = http.createServer((req, res) => {
+  if (req.url?.startsWith('/api/')) {
+    return handleApi(req, res);
+  }
+  serveStatic(req, res);
+});
 
 function openBrowser(url) {
   let cmd;

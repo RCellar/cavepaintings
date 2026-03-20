@@ -781,6 +781,23 @@ function connectWebSocket() {
         }
         showSubmitFeedback();
       }
+      if (msg.type === 'load') {
+        if (msg.mode === 'replace') {
+          canvas.loadFromJSON(msg.diagram, () => {
+            canvas.renderAll();
+            saveState();
+          });
+        } else {
+          const objects = msg.diagram?.objects || [];
+          if (objects.length > 0) {
+            fabric.util.enlivenObjects(objects).then(enlivened => {
+              enlivened.forEach(obj => canvas.add(obj));
+              canvas.renderAll();
+              saveState();
+            });
+          }
+        }
+      }
     } catch (_) {}
   });
 }
