@@ -12,6 +12,7 @@ const SUBMISSIONS_DIR = path.join(os.tmpdir(), 'cavepaintings', 'submissions');
 const STATE_DIR = path.join(os.tmpdir(), 'cavepaintings');
 const STATE_FILE = path.join(STATE_DIR, 'state.json');
 const noState = !!process.env.CAVEPAINTINGS_NO_STATE;
+const projectDir = process.env.CAVEPAINTINGS_PROJECT_DIR || '';
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -83,6 +84,12 @@ function serveStatic(req, res) {
 
 function handleApi(req, res) {
   const parsed = new URL(req.url, 'http://localhost');
+
+  if (req.method === 'GET' && parsed.pathname === '/api/info') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ projectDir }));
+    return;
+  }
 
   if (req.method === 'GET' && parsed.pathname === '/api/submissions') {
     const since = parseInt(parsed.searchParams.get('since') || '0', 10);
@@ -257,7 +264,7 @@ tryListen(opts.port)
 
     if (!noState) {
       fs.mkdirSync(STATE_DIR, { recursive: true });
-      fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url }, null, 2));
+      fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url, projectDir }, null, 2));
     }
     if (opts.open) openBrowser(url);
   })

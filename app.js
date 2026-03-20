@@ -951,8 +951,20 @@ function setupZoomIndicator() {
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
+function updateTabTitle() {
+  fetch('/api/info')
+    .then((r) => r.json())
+    .then((info) => {
+      if (info.projectDir) {
+        document.title = `Cavepaintings — ${info.projectDir}`;
+      }
+    })
+    .catch(() => {});
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   initCanvas();
+  updateTabTitle();
   document.getElementById('btn-submit').addEventListener('click', submitToClaude);
   document.getElementById('prompt-input').addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {

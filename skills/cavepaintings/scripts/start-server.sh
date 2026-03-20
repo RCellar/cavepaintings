@@ -63,9 +63,9 @@ SERVER_LOG="$STATE_DIR/server.log"
 
 # Start server
 if [[ "$FOREGROUND" == "true" ]]; then
-  node "$PROJECT_ROOT/server.js" --no-open
+  CAVEPAINTINGS_PROJECT_DIR="${CAVEPAINTINGS_PROJECT_DIR:-}" node "$PROJECT_ROOT/server.js" --no-open
 else
-  nohup node "$PROJECT_ROOT/server.js" --no-open > "$SERVER_LOG" 2>&1 &
+  CAVEPAINTINGS_PROJECT_DIR="${CAVEPAINTINGS_PROJECT_DIR:-}" nohup node "$PROJECT_ROOT/server.js" --no-open > "$SERVER_LOG" 2>&1 &
   SERVER_PID=$!
   disown "$SERVER_PID" 2>/dev/null
 

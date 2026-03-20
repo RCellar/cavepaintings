@@ -10,7 +10,7 @@ invocable_by:
 1. Start (or reuse) the server:
 
    ```bash
-   <SKILL_DIR>/scripts/start-server.sh
+   CAVEPAINTINGS_PROJECT_DIR="$(basename "$(pwd)")" <SKILL_DIR>/scripts/start-server.sh
    ```
 
    This checks for an existing session automatically. If one is running, it returns the existing connection info with `"status": "existing"`. Otherwise it starts a new server. Either way, save the `url` and `port` from the JSON response.
