@@ -111,19 +111,17 @@ function shutdown() {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-function handleSubmission(msg) {
-  fs.mkdirSync(SUBMISSIONS_DIR, { recursive: true });
+async function handleSubmission(msg) {
+  await fs.promises.mkdir(SUBMISSIONS_DIR, { recursive: true });
   const timestamp = Date.now();
   const baseName = `submission-${timestamp}`;
 
-  // Write PNG
   if (msg.image) {
     const base64Data = msg.image.replace(/^data:image\/\w+;base64,/, '');
-    fs.writeFileSync(path.join(SUBMISSIONS_DIR, `${baseName}.png`), Buffer.from(base64Data, 'base64'));
+    await fs.promises.writeFile(path.join(SUBMISSIONS_DIR, `${baseName}.png`), Buffer.from(base64Data, 'base64'));
   }
 
-  // Write JSON (diagram + prompt)
-  fs.writeFileSync(path.join(SUBMISSIONS_DIR, `${baseName}.json`), JSON.stringify({
+  await fs.promises.writeFile(path.join(SUBMISSIONS_DIR, `${baseName}.json`), JSON.stringify({
     prompt: msg.prompt || '',
     diagram: msg.diagram || {},
     timestamp,
@@ -131,6 +129,7 @@ function handleSubmission(msg) {
 }
 
 let wss;
+let activeSocket = null;
 
 function tryListen(port, maxRetries = 10) {
   return new Promise((resolve, reject) => {
@@ -166,15 +165,19 @@ tryListen(opts.port)
 
     wss = new WebSocketServer({ server, maxPayload: 50 * 1024 * 1024 });
     wss.on('connection', (socket) => {
-      socket.on('message', (raw) => {
+      activeSocket = socket;
+      socket.on('close', () => {
+        if (activeSocket === socket) activeSocket = null;
+      });
+      socket.on('message', async (raw) => {
         try {
           const msg = JSON.parse(raw.toString());
           if (msg.type === 'submit') {
-            handleSubmission(msg);
+            await handleSubmission(msg);
             socket.send(JSON.stringify({ type: 'ack', timestamp: Date.now() }));
           }
         } catch (e) {
-          // ignore malformed messages
+          // ignore malformed messages or write errors
         }
       });
     });
@@ -190,4 +193,4 @@ tryListen(opts.port)
     process.exit(1);
   });
 
-export { server, wss, opts };
+export { server, wss, opts, activeSocket };

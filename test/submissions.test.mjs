@@ -85,4 +85,37 @@ describe('Submission Storage', () => {
     assert.deepStrictEqual(ourJson.diagram, { shapes: [] });
     assert.ok(ourJson.timestamp, 'should have a timestamp');
   });
+
+  it('sends ack only after files are written to disk', async () => {
+    const ws = new WebSocket(`ws://localhost:${PORT}`);
+    await new Promise((resolve, reject) => {
+      ws.on('open', resolve);
+      ws.on('error', reject);
+    });
+
+    const ackPromise = new Promise((resolve) => {
+      ws.on('message', (data) => resolve(JSON.parse(data.toString())));
+    });
+
+    ws.send(JSON.stringify({
+      type: 'submit',
+      image: `data:image/png;base64,${TINY_PNG}`,
+      diagram: { shapes: ['test'] },
+      prompt: 'ack-timing test',
+    }));
+
+    const ack = await ackPromise;
+    assert.strictEqual(ack.type, 'ack');
+
+    const files = fs.readdirSync(SUBMISSIONS_DIR);
+    const jsonFiles = files.filter(f => f.endsWith('.json'));
+    let found = false;
+    for (const f of jsonFiles) {
+      const data = JSON.parse(fs.readFileSync(path.join(SUBMISSIONS_DIR, f), 'utf8'));
+      if (data.prompt === 'ack-timing test') { found = true; break; }
+    }
+    assert.ok(found, 'submission JSON should exist at the time ack is received');
+
+    ws.close();
+  });
 });
