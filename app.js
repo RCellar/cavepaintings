@@ -251,6 +251,17 @@ function setupCanvasEvents() {
 
     if (!isDrawingShape || !activeShape) return;
     isDrawingShape = false;
+
+    // Discard zero-size shapes (click without drag)
+    const w = activeShape.width ?? activeShape.rx ?? 0;
+    const h = activeShape.height ?? activeShape.ry ?? 0;
+    if (w === 0 && h === 0) {
+      canvas.remove(activeShape);
+      activeShape = null;
+      shapeOrigin = null;
+      return;
+    }
+
     activeShape.set({ selectable: true, evented: true });
     canvas.setActiveObject(activeShape);
     activeShape = null;
