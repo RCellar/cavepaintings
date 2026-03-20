@@ -54,7 +54,7 @@ describe('Submission Storage', () => {
 
     ws.send(JSON.stringify({
       type: 'submit',
-      png: `data:image/png;base64,${TINY_PNG}`,
+      image: `data:image/png;base64,${TINY_PNG}`,
       diagram: { shapes: [] },
       prompt: 'test prompt',
     }));

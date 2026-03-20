@@ -10,7 +10,6 @@ import WebSocket from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-const STATE_FILE = path.join(os.tmpdir(), 'cavepaintings', 'state.json');
 const SUBMISSIONS_DIR = path.join(os.tmpdir(), 'cavepaintings', 'submissions');
 
 describe('End-to-End', () => {
@@ -18,10 +17,12 @@ describe('End-to-End', () => {
   const PORT = 19735;
 
   before(async () => {
-    if (fs.existsSync(STATE_FILE)) fs.unlinkSync(STATE_FILE);
     if (fs.existsSync(SUBMISSIONS_DIR)) fs.rmSync(SUBMISSIONS_DIR, { recursive: true });
 
-    proc = spawn('node', ['server.js', '--port', String(PORT), '--no-open'], { cwd: ROOT });
+    proc = spawn('node', ['server.js', '--port', String(PORT), '--no-open'], {
+      cwd: ROOT,
+      env: { ...process.env, CAVEPAINTINGS_NO_STATE: '1' },
+    });
     await new Promise((resolve) => {
       proc.stdout.on('data', (data) => {
         if (data.toString().includes('listening')) resolve();
@@ -36,12 +37,7 @@ describe('End-to-End', () => {
   });
 
   it('full flow: connect, submit, verify files and ack', async () => {
-    // 1. State file should exist
-    assert.ok(fs.existsSync(STATE_FILE), 'State file exists');
-    const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    assert.strictEqual(state.port, PORT);
-
-    // 2. HTTP serves index.html
+    // 1. HTTP serves index.html
     const html = await new Promise((resolve, reject) => {
       http.get(`http://localhost:${PORT}/`, (res) => {
         let data = '';

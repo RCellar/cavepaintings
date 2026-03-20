@@ -77,63 +77,72 @@ function shutdown() {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-function listen(port, maxRetries = 10) {
-  server.listen(port, () => {
-    opts.port = port;
-    const url = `http://localhost:${port}`;
-    console.log(`listening on ${url}`);
-    if (!noState) {
-      fs.mkdirSync(STATE_DIR, { recursive: true });
-      fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url }, null, 2));
-    }
-    if (opts.open) openBrowser(url);
-  });
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE' && maxRetries > 0) {
-      console.log(`Port ${port} in use, trying ${port + 1}...`);
-      server.removeAllListeners('error');
-      listen(port + 1, maxRetries - 1);
-    } else {
-      console.error(`Failed to start server: ${err.message}`);
-      process.exit(1);
-    }
-  });
-}
-
 function handleSubmission(msg) {
   fs.mkdirSync(SUBMISSIONS_DIR, { recursive: true });
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const base = path.join(SUBMISSIONS_DIR, timestamp);
+  const timestamp = Date.now();
+  const baseName = `submission-${timestamp}`;
 
   // Write PNG
-  const pngData = (msg.image || '').replace(/^data:image\/\w+;base64,/, '');
-  fs.writeFileSync(`${base}.png`, Buffer.from(pngData, 'base64'));
+  if (msg.image) {
+    const base64Data = msg.image.replace(/^data:image\/\w+;base64,/, '');
+    fs.writeFileSync(path.join(SUBMISSIONS_DIR, `${baseName}.png`), Buffer.from(base64Data, 'base64'));
+  }
 
-  // Write JSON
-  fs.writeFileSync(`${base}.json`, JSON.stringify({
+  // Write JSON (diagram + prompt)
+  fs.writeFileSync(path.join(SUBMISSIONS_DIR, `${baseName}.json`), JSON.stringify({
     prompt: msg.prompt || '',
     diagram: msg.diagram || {},
-    timestamp: new Date().toISOString(),
+    timestamp,
   }, null, 2));
 }
 
 let wss;
 
-listen(opts.port);
-
-wss = new WebSocketServer({ server });
-wss.on('connection', (socket) => {
-  socket.on('message', (raw) => {
-    try {
-      const msg = JSON.parse(raw.toString());
-      if (msg.type === 'submit') {
-        handleSubmission(msg);
-        socket.send(JSON.stringify({ type: 'ack', timestamp: Date.now() }));
+function startServer(port, maxRetries = 10) {
+  return new Promise((resolve, reject) => {
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE' && maxRetries > 0) {
+        console.log(`Port ${port} in use, trying ${port + 1}...`);
+        startServer(port + 1, maxRetries - 1).then(resolve, reject);
+      } else {
+        reject(err);
       }
-    } catch (e) {
-      // ignore malformed messages
-    }
+    });
+    server.listen(port, () => {
+      server.removeAllListeners('error');
+      opts.port = port;
+      const url = `http://localhost:${port}`;
+      console.log(`listening on ${url}`);
+
+      // Set up WebSocket server after successful listen
+      wss = new WebSocketServer({ server });
+      wss.on('connection', (socket) => {
+        socket.on('message', (raw) => {
+          try {
+            const msg = JSON.parse(raw.toString());
+            if (msg.type === 'submit') {
+              handleSubmission(msg);
+              socket.send(JSON.stringify({ type: 'ack', timestamp: Date.now() }));
+            }
+          } catch (e) {
+            // ignore malformed messages
+          }
+        });
+      });
+
+      if (!noState) {
+        fs.mkdirSync(STATE_DIR, { recursive: true });
+        fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url }, null, 2));
+      }
+      if (opts.open) openBrowser(url);
+      resolve();
+    });
   });
+}
+
+startServer(opts.port).catch((err) => {
+  console.error(`Failed to start server: ${err.message}`);
+  process.exit(1);
 });
 
 export { server, wss, opts };
