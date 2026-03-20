@@ -116,6 +116,7 @@ function setTool(tool) {
 
   document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tool === tool);
+    btn.setAttribute('aria-pressed', String(btn.dataset.tool === tool));
   });
 }
 
