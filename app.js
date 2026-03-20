@@ -62,12 +62,17 @@ function initCanvas() {
 // ---------------------------------------------------------------------------
 // Window resize
 // ---------------------------------------------------------------------------
+let resizeRAF = null;
 function handleResize() {
-  const availableHeight = window.innerHeight - 48;
-  const availableWidth = window.innerWidth - 56;
-  canvas.setWidth(availableWidth);
-  canvas.setHeight(availableHeight);
-  canvas.renderAll();
+  if (resizeRAF) return;
+  resizeRAF = requestAnimationFrame(() => {
+    resizeRAF = null;
+    canvas.setDimensions({
+      width: window.innerWidth - 56,
+      height: window.innerHeight - 48,
+    });
+    canvas.requestRenderAll();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -224,7 +229,10 @@ function setupCanvasEvents() {
       });
       canvas.add(activeShape);
     } else if (currentTool === 'arrow') {
-      activeShape = createArrow(pointer.x, pointer.y, pointer.x, pointer.y);
+      activeShape = new fabric.Line(
+        [pointer.x, pointer.y, pointer.x, pointer.y],
+        { stroke: '#4a9eff', strokeWidth: 2, selectable: false, evented: false }
+      );
       canvas.add(activeShape);
     }
   });
@@ -265,11 +273,9 @@ function setupCanvasEvents() {
         ry,
       });
     } else if (currentTool === 'arrow') {
-      canvas.remove(activeShape);
-      activeShape = createArrow(ox, oy, pointer.x, pointer.y);
-      canvas.add(activeShape);
+      activeShape.set({ x2: pointer.x, y2: pointer.y });
     }
-    canvas.renderAll();
+    canvas.requestRenderAll();
   });
 
   canvas.on('mouse:up', function (opt) {
@@ -283,6 +289,27 @@ function setupCanvasEvents() {
 
     if (!isDrawingShape || !activeShape) return;
     isDrawingShape = false;
+
+    // Finalize arrow: replace temp line with grouped arrow+arrowhead
+    // Must be BEFORE the zero-size check — Line has no .width/.height
+    if (currentTool === 'arrow') {
+      const line = activeShape;
+      // Discard zero-length arrows (click without drag)
+      if (line.x1 === line.x2 && line.y1 === line.y2) {
+        canvas.remove(line);
+        activeShape = null;
+        shapeOrigin = null;
+        return;
+      }
+      const arrow = createArrow(line.x1, line.y1, line.x2, line.y2);
+      canvas.remove(line);
+      canvas.add(arrow);
+      canvas.setActiveObject(arrow);
+      activeShape = null;
+      shapeOrigin = null;
+      saveState();
+      return;
+    }
 
     // Discard zero-size shapes (click without drag)
     const w = activeShape.width ?? activeShape.rx ?? 0;

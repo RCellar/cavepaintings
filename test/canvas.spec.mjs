@@ -336,3 +336,39 @@ test.describe('Start server with session check', () => {
   // This tests the combined start-server.sh behavior — covered in
   // test/start-server.test.mjs since it's a shell script test, not browser.
 });
+
+// ---------------------------------------------------------------------------
+// Arrow tool performance
+// ---------------------------------------------------------------------------
+
+test.describe('Arrow tool performance', () => {
+  test('arrow tool creates a grouped arrow on mouse up', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+
+    await page.click('[data-tool="arrow"]');
+
+    const canvasEl = page.locator('#drawing-canvas');
+    const box = await canvasEl.boundingBox();
+    const startX = box.x + 100;
+    const startY = box.y + 100;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(startX + 200, startY + 50, { steps: 10 });
+    await page.mouse.up();
+
+    const result = await page.evaluate(() => {
+      const objects = canvas.getObjects();
+      const last = objects[objects.length - 1];
+      return {
+        count: objects.length,
+        type: last?.type,
+        isGroup: last?.type === 'group',
+      };
+    });
+
+    expect(result.count).toBeGreaterThan(0);
+    expect(result.isGroup).toBe(true);
+  });
+});
