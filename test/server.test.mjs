@@ -1,0 +1,51 @@
+import { describe, it, before, after } from 'node:test';
+import assert from 'node:assert';
+import http from 'node:http';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, '..');
+
+function fetch(url) {
+  return new Promise((resolve, reject) => {
+    http.get(url, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => resolve({ status: res.statusCode, body: data, headers: res.headers }));
+    }).on('error', reject);
+  });
+}
+
+describe('HTTP Server', () => {
+  let proc;
+  const PORT = 19731;
+
+  before(async () => {
+    proc = spawn('node', ['server.js', '--port', String(PORT), '--no-open'], {
+      cwd: ROOT,
+      env: { ...process.env, CAVEPAINTINGS_NO_STATE: '1' },
+    });
+    await new Promise((resolve) => {
+      proc.stdout.on('data', (data) => {
+        if (data.toString().includes('listening')) resolve();
+      });
+      setTimeout(resolve, 2000);
+    });
+  });
+
+  after(() => { proc?.kill(); });
+
+  it('serves index.html at /', async () => {
+    const res = await fetch(`http://localhost:${PORT}/`);
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.body.includes('<!DOCTYPE html>'));
+    assert.ok(res.headers['content-type'].includes('text/html'));
+  });
+
+  it('returns 404 for unknown paths', async () => {
+    const res = await fetch(`http://localhost:${PORT}/nonexistent`);
+    assert.strictEqual(res.status, 404);
+  });
+});
