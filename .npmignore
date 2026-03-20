@@ -1,0 +1,11 @@
+# Non-runtime files excluded from packaging
+test/
+scripts/
+docs/
+playwright.config.mjs
+mockup.svg
+.happytrails/
+.superpowers/
+test-results/
+.gitattributes
+.npmignore

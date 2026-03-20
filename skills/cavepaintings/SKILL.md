@@ -26,23 +26,9 @@ invocable_by:
 
    Read the PNG with the Read tool to see the visual content.
 
-4. **Pushing objects to the canvas:** You can programmatically place Fabric.js objects on the user's canvas:
+4. **Pushing objects to the canvas:** POST Fabric.js objects to `http://localhost:{port}/api/canvas` with `{"diagram":{"objects":[...]},"mode":"merge"}`. Objects appear on the canvas in real time. Use `"merge"` to add or `"replace"` to clear and load.
 
-   ```bash
-   curl -s -X POST http://localhost:{port}/api/canvas \
-     -H 'Content-Type: application/json' \
-     -d '{"diagram":{"objects":[{"type":"rect","left":50,"top":50,"width":200,"height":100,"fill":"#4a9eff","stroke":"#fff","strokeWidth":2}]},"mode":"merge"}'
-   ```
-
-   Use `"mode": "merge"` to add to the existing canvas or `"mode": "replace"` to clear and load. Supported object types include `rect`, `ellipse`, `i-text`, `line`, `path`, `group`, and `image`.
-
-5. **Polling submissions via API** (alternative to hook):
-
-   ```bash
-   curl -s http://localhost:{port}/api/submissions?since=0
-   ```
-
-   Returns all submissions newer than the given timestamp, with prompt text and file paths.
+5. **Polling submissions via API:** GET `http://localhost:{port}/api/submissions?since=0` returns all submissions newer than the given timestamp.
 
 ## Important
 

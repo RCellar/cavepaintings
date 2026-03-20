@@ -1,0 +1,9 @@
+# Exclude non-runtime files from git archive (used by plugin cache clones)
+test/                 export-ignore
+scripts/              export-ignore
+docs/                 export-ignore
+playwright.config.mjs export-ignore
+mockup.svg            export-ignore
+.happytrails/         export-ignore
+.superpowers/         export-ignore
+test-results/         export-ignore
