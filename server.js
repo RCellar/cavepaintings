@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
+import { exec } from 'node:child_process';
 import { WebSocketServer } from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -50,6 +51,20 @@ function serveStatic(req, res) {
 const opts = parseArgs(process.argv.slice(2));
 const server = http.createServer(serveStatic);
 
+function openBrowser(url) {
+  let cmd;
+  if (process.platform === 'darwin') {
+    cmd = `open "${url}"`;
+  } else if (process.platform === 'win32') {
+    cmd = `start "" "${url}"`;
+  } else {
+    cmd = `xdg-open "${url}"`;
+  }
+  exec(cmd, (err) => {
+    if (err) console.error(`Failed to open browser: ${err.message}`);
+  });
+}
+
 function shutdown() {
   if (!noState && fs.existsSync(STATE_FILE)) {
     try { fs.rmSync(STATE_FILE); } catch (e) { /* ignore */ }
@@ -71,6 +86,7 @@ function listen(port, maxRetries = 10) {
       fs.mkdirSync(STATE_DIR, { recursive: true });
       fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url }, null, 2));
     }
+    if (opts.open) openBrowser(url);
   });
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE' && maxRetries > 0) {
