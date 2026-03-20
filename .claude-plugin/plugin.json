@@ -1,7 +1,7 @@
 {
   "name": "cavepaintings",
   "description": "Browser-based drawing canvas for diagramming, annotating images, and submitting visuals to Claude Code",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": {
     "name": "RCellar"
   },
