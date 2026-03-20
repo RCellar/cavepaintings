@@ -2,9 +2,12 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import os from 'node:os';
 import { WebSocketServer } from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const SUBMISSIONS_DIR = path.join(os.tmpdir(), 'cavepaintings', 'submissions');
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -61,7 +64,22 @@ function listen(port, maxRetries = 10) {
   });
 }
 
-function handleSubmission(msg) {}
+function handleSubmission(msg) {
+  fs.mkdirSync(SUBMISSIONS_DIR, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const base = path.join(SUBMISSIONS_DIR, timestamp);
+
+  // Write PNG
+  const pngData = (msg.png || '').replace(/^data:image\/\w+;base64,/, '');
+  fs.writeFileSync(`${base}.png`, Buffer.from(pngData, 'base64'));
+
+  // Write JSON
+  fs.writeFileSync(`${base}.json`, JSON.stringify({
+    prompt: msg.prompt || '',
+    diagram: msg.diagram || {},
+    timestamp: new Date().toISOString(),
+  }, null, 2));
+}
 
 let wss;
 
