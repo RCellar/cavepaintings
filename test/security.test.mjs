@@ -8,6 +8,19 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
+function httpRequest(options, body) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => resolve({ status: res.statusCode, body: data, headers: res.headers }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
 function fetch(url) {
   return new Promise((resolve, reject) => {
     http.get(url, (res) => {
@@ -66,5 +79,77 @@ describe('Security Headers', () => {
     const res = await fetch(`http://localhost:${SECURITY_PORT}/api/info`);
     assert.ok(res.headers['content-security-policy']);
     assert.strictEqual(res.headers['x-content-type-options'], 'nosniff');
+  });
+});
+
+describe('Input Validation — POST /api/canvas', () => {
+  let proc;
+  const PORT = 19751;
+
+  before(async () => {
+    proc = spawn('node', ['server.js', '--port', String(PORT), '--no-open'], {
+      cwd: ROOT,
+      env: { ...process.env, CAVEPAINTINGS_NO_STATE: '1' },
+    });
+    await new Promise((resolve) => {
+      proc.stdout.on('data', (data) => {
+        if (data.toString().includes('listening')) resolve();
+      });
+      setTimeout(resolve, 2000);
+    });
+  });
+
+  after(() => { proc?.kill(); });
+
+  function post(body) {
+    const str = typeof body === 'string' ? body : JSON.stringify(body);
+    return httpRequest({
+      hostname: 'localhost', port: PORT, path: '/api/canvas', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(str) },
+    }, str);
+  }
+
+  it('rejects missing diagram field', async () => {
+    const res = await post({ mode: 'merge' });
+    assert.strictEqual(res.status, 400);
+  });
+
+  it('rejects non-object diagram', async () => {
+    const res = await post({ diagram: 'not-object', mode: 'merge' });
+    assert.strictEqual(res.status, 400);
+  });
+
+  it('rejects diagram without objects array', async () => {
+    const res = await post({ diagram: {}, mode: 'merge' });
+    assert.strictEqual(res.status, 400);
+  });
+
+  it('rejects invalid mode', async () => {
+    const res = await post({ diagram: { objects: [] }, mode: 'invalid' });
+    assert.strictEqual(res.status, 400);
+  });
+
+  it('rejects objects without type field', async () => {
+    const res = await post({ diagram: { objects: [{ left: 10 }] }, mode: 'merge' });
+    assert.strictEqual(res.status, 400);
+  });
+
+  it('rejects unknown top-level keys', async () => {
+    const res = await post({ diagram: { objects: [] }, mode: 'merge', extra: true });
+    assert.strictEqual(res.status, 400);
+  });
+
+  it('rejects oversized payloads (Content-Length > 5MB)', async () => {
+    const huge = JSON.stringify({ diagram: { objects: [] }, mode: 'merge', pad: 'x'.repeat(6 * 1024 * 1024) });
+    const res = await httpRequest({
+      hostname: 'localhost', port: PORT, path: '/api/canvas', method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(huge) },
+    }, huge);
+    assert.strictEqual(res.status, 413);
+  });
+
+  it('accepts valid payload (returns 503 with no browser — expected)', async () => {
+    const res = await post({ diagram: { objects: [{ type: 'rect' }] }, mode: 'merge' });
+    assert.ok(res.status === 503 || res.status === 200, `Expected 503 or 200, got ${res.status}`);
   });
 });

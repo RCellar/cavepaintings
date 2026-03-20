@@ -139,9 +139,72 @@ function handleApi(req, res) {
   }
 
   if (req.method === 'POST' && parsed.pathname === '/api/canvas') {
+    // Enforce 5 MB body size limit
+    const contentLength = parseInt(req.headers['content-length'] || '0', 10);
+    if (contentLength > 5 * 1024 * 1024) {
+      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Payload too large (max 5 MB)' }));
+      return;
+    }
+
     let body = '';
-    req.on('data', (chunk) => body += chunk);
+    let bodySize = 0;
+    let oversized = false;
+    req.on('data', (chunk) => {
+      if (oversized) return;
+      bodySize += chunk.length;
+      if (bodySize > 5 * 1024 * 1024) {
+        oversized = true;
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Payload too large (max 5 MB)' }));
+        req.destroy();
+        return;
+      }
+      body += chunk;
+    });
     req.on('end', () => {
+      if (oversized) return;
+
+      let msg;
+      try {
+        msg = JSON.parse(body);
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+        return;
+      }
+
+      // Schema validation
+      const validKeys = new Set(['diagram', 'mode']);
+      const unknownKeys = Object.keys(msg).filter(k => !validKeys.has(k));
+      if (unknownKeys.length > 0) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: `Unknown keys: ${unknownKeys.join(', ')}` }));
+        return;
+      }
+      if (!msg.diagram || typeof msg.diagram !== 'object' || Array.isArray(msg.diagram)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'diagram must be an object' }));
+        return;
+      }
+      if (!Array.isArray(msg.diagram.objects)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'diagram.objects must be an array' }));
+        return;
+      }
+      if (msg.mode !== 'merge' && msg.mode !== 'replace') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'mode must be "merge" or "replace"' }));
+        return;
+      }
+      for (let i = 0; i < msg.diagram.objects.length; i++) {
+        if (!msg.diagram.objects[i] || typeof msg.diagram.objects[i].type !== 'string') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: `objects[${i}] must have a string "type" field` }));
+          return;
+        }
+      }
+
       if (!activeSocket || activeSocket.readyState !== 1) {
         res.writeHead(503, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'No browser client connected' }));
@@ -149,17 +212,16 @@ function handleApi(req, res) {
       }
 
       try {
-        const msg = JSON.parse(body);
         activeSocket.send(JSON.stringify({
           type: 'load',
-          diagram: msg.diagram || {},
-          mode: msg.mode || 'merge',
+          diagram: msg.diagram,
+          mode: msg.mode,
         }));
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true }));
       } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to forward to client' }));
       }
     });
     return;
