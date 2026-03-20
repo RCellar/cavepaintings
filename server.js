@@ -98,51 +98,56 @@ function handleSubmission(msg) {
 
 let wss;
 
-function startServer(port, maxRetries = 10) {
+function tryListen(port, maxRetries = 10) {
   return new Promise((resolve, reject) => {
-    server.once('error', (err) => {
+    const onError = (err) => {
       if (err.code === 'EADDRINUSE' && maxRetries > 0) {
         console.log(`Port ${port} in use, trying ${port + 1}...`);
-        startServer(port + 1, maxRetries - 1).then(resolve, reject);
+        server.close(() => {
+          tryListen(port + 1, maxRetries - 1).then(resolve, reject);
+        });
       } else {
         reject(err);
       }
-    });
+    };
+    server.once('error', onError);
     server.listen(port, () => {
-      server.removeAllListeners('error');
-      opts.port = port;
-      const url = `http://localhost:${port}`;
-      console.log(`listening on ${url}`);
-
-      // Set up WebSocket server after successful listen
-      wss = new WebSocketServer({ server });
-      wss.on('connection', (socket) => {
-        socket.on('message', (raw) => {
-          try {
-            const msg = JSON.parse(raw.toString());
-            if (msg.type === 'submit') {
-              handleSubmission(msg);
-              socket.send(JSON.stringify({ type: 'ack', timestamp: Date.now() }));
-            }
-          } catch (e) {
-            // ignore malformed messages
-          }
-        });
-      });
-
-      if (!noState) {
-        fs.mkdirSync(STATE_DIR, { recursive: true });
-        fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url }, null, 2));
-      }
-      if (opts.open) openBrowser(url);
-      resolve();
+      server.removeListener('error', onError);
+      resolve(port);
     });
   });
 }
 
-startServer(opts.port).catch((err) => {
-  console.error(`Failed to start server: ${err.message}`);
-  process.exit(1);
-});
+tryListen(opts.port)
+  .then((port) => {
+    opts.port = port;
+    const url = `http://localhost:${port}`;
+    console.log(`listening on ${url}`);
+
+    wss = new WebSocketServer({ server });
+    wss.on('connection', (socket) => {
+      socket.on('message', (raw) => {
+        try {
+          const msg = JSON.parse(raw.toString());
+          if (msg.type === 'submit') {
+            handleSubmission(msg);
+            socket.send(JSON.stringify({ type: 'ack', timestamp: Date.now() }));
+          }
+        } catch (e) {
+          // ignore malformed messages
+        }
+      });
+    });
+
+    if (!noState) {
+      fs.mkdirSync(STATE_DIR, { recursive: true });
+      fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url }, null, 2));
+    }
+    if (opts.open) openBrowser(url);
+  })
+  .catch((err) => {
+    console.error(`Failed to start server: ${err.message}`);
+    process.exit(1);
+  });
 
 export { server, wss, opts };

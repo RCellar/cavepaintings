@@ -38,22 +38,38 @@ if [[ -f "$STATE_FILE" ]]; then
   rm -f "$STATE_FILE"
 fi
 
+# Log file for diagnosing crashes
+STATE_DIR="$(dirname "$STATE_FILE")"
+mkdir -p "$STATE_DIR"
+SERVER_LOG="$STATE_DIR/server.log"
+
 # Start server
 if [[ "$FOREGROUND" == "true" ]]; then
   node "$PROJECT_ROOT/server.js" --no-open
 else
-  nohup node "$PROJECT_ROOT/server.js" --no-open > /dev/null 2>&1 &
-  disown
+  nohup node "$PROJECT_ROOT/server.js" --no-open > "$SERVER_LOG" 2>&1 &
+  SERVER_PID=$!
+  disown "$SERVER_PID" 2>/dev/null
 
-  # Wait for state file (server writes it on successful listen)
+  # Wait for state file and verify server stays alive
   for i in $(seq 1 20); do
     if [[ -f "$STATE_FILE" ]]; then
-      cat "$STATE_FILE"
-      exit 0
+      # Verify server is still running (not a crash-after-start)
+      if kill -0 "$SERVER_PID" 2>/dev/null; then
+        cat "$STATE_FILE"
+        exit 0
+      else
+        echo "{\"error\": \"Server started but crashed immediately. Check $SERVER_LOG\"}"
+        exit 1
+      fi
+    fi
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+      echo "{\"error\": \"Server process exited before starting. Check $SERVER_LOG\"}"
+      exit 1
     fi
     sleep 0.25
   done
 
-  echo '{"error": "Server did not start within 5 seconds"}'
+  echo "{\"error\": \"Server did not start within 5 seconds. Check $SERVER_LOG\"}"
   exit 1
 fi
