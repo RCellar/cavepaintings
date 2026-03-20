@@ -32,12 +32,45 @@ function parseArgs(args) {
 }
 
 function serveStatic(req, res) {
-  let filePath = req.url === '/' ? '/index.html' : req.url;
-  filePath = path.join(__dirname, filePath);
-  const ext = path.extname(filePath);
+  let parsed;
+  try {
+    parsed = new URL(req.url, 'http://localhost');
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  // Reject invalid percent-encoding sequences
+  try {
+    decodeURIComponent(parsed.pathname);
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  // Block path traversal — reject raw URLs containing '..' segments
+  if (req.url.split('?')[0].split('/').some((seg) => seg === '..' || seg === '.')) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const pathname = parsed.pathname === '/' ? '/index.html' : parsed.pathname;
+  const resolved = path.resolve(__dirname, '.' + pathname);
+
+  // Block path traversal — resolved path must be inside __dirname
+  if (!resolved.startsWith(__dirname + path.sep) && resolved !== __dirname) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const ext = path.extname(resolved);
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-  fs.readFile(filePath, (err, data) => {
+  fs.readFile(resolved, (err, data) => {
     if (err) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('Not Found');
@@ -48,8 +81,81 @@ function serveStatic(req, res) {
   });
 }
 
+function handleApi(req, res) {
+  const parsed = new URL(req.url, 'http://localhost');
+
+  if (req.method === 'GET' && parsed.pathname === '/api/submissions') {
+    const since = parseInt(parsed.searchParams.get('since') || '0', 10);
+    let submissions = [];
+
+    if (fs.existsSync(SUBMISSIONS_DIR)) {
+      const jsonFiles = fs.readdirSync(SUBMISSIONS_DIR)
+        .filter(f => f.endsWith('.json'))
+        .sort();
+
+      for (const file of jsonFiles) {
+        const match = file.match(/submission-(\d+)\.json$/);
+        if (!match) continue;
+        const ts = parseInt(match[1], 10);
+        if (ts <= since) continue;
+
+        const jsonPath = path.join(SUBMISSIONS_DIR, file);
+        const pngPath = jsonPath.replace(/\.json$/, '.png');
+        const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+
+        submissions.push({
+          id: `submission-${ts}`,
+          timestamp: ts,
+          prompt: data.prompt || '',
+          png: fs.existsSync(pngPath) ? pngPath : null,
+          json: jsonPath,
+        });
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ submissions }));
+    return;
+  }
+
+  if (req.method === 'POST' && parsed.pathname === '/api/canvas') {
+    let body = '';
+    req.on('data', (chunk) => body += chunk);
+    req.on('end', () => {
+      if (!activeSocket || activeSocket.readyState !== 1) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No browser client connected' }));
+        return;
+      }
+
+      try {
+        const msg = JSON.parse(body);
+        activeSocket.send(JSON.stringify({
+          type: 'load',
+          diagram: msg.diagram || {},
+          mode: msg.mode || 'merge',
+        }));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+    });
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Not found' }));
+}
+
 const opts = parseArgs(process.argv.slice(2));
-const server = http.createServer(serveStatic);
+const server = http.createServer((req, res) => {
+  if (req.url?.startsWith('/api/')) {
+    return handleApi(req, res);
+  }
+  serveStatic(req, res);
+});
 
 function openBrowser(url) {
   let cmd;
@@ -69,6 +175,7 @@ function shutdown() {
   if (!noState && fs.existsSync(STATE_FILE)) {
     try { fs.rmSync(STATE_FILE); } catch (e) { /* ignore */ }
   }
+  try { fs.rmSync(SUBMISSIONS_DIR, { recursive: true, force: true }); } catch (e) { /* ignore */ }
   if (wss) wss.close();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 1000);
@@ -77,19 +184,17 @@ function shutdown() {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-function handleSubmission(msg) {
-  fs.mkdirSync(SUBMISSIONS_DIR, { recursive: true });
+async function handleSubmission(msg) {
+  await fs.promises.mkdir(SUBMISSIONS_DIR, { recursive: true });
   const timestamp = Date.now();
   const baseName = `submission-${timestamp}`;
 
-  // Write PNG
   if (msg.image) {
     const base64Data = msg.image.replace(/^data:image\/\w+;base64,/, '');
-    fs.writeFileSync(path.join(SUBMISSIONS_DIR, `${baseName}.png`), Buffer.from(base64Data, 'base64'));
+    await fs.promises.writeFile(path.join(SUBMISSIONS_DIR, `${baseName}.png`), Buffer.from(base64Data, 'base64'));
   }
 
-  // Write JSON (diagram + prompt)
-  fs.writeFileSync(path.join(SUBMISSIONS_DIR, `${baseName}.json`), JSON.stringify({
+  await fs.promises.writeFile(path.join(SUBMISSIONS_DIR, `${baseName}.json`), JSON.stringify({
     prompt: msg.prompt || '',
     diagram: msg.diagram || {},
     timestamp,
@@ -97,6 +202,7 @@ function handleSubmission(msg) {
 }
 
 let wss;
+let activeSocket = null;
 
 function tryListen(port, maxRetries = 10) {
   return new Promise((resolve, reject) => {
@@ -130,17 +236,21 @@ tryListen(opts.port)
     const url = `http://localhost:${port}`;
     console.log(`listening on ${url}`);
 
-    wss = new WebSocketServer({ server });
+    wss = new WebSocketServer({ server, maxPayload: 50 * 1024 * 1024 });
     wss.on('connection', (socket) => {
-      socket.on('message', (raw) => {
+      activeSocket = socket;
+      socket.on('close', () => {
+        if (activeSocket === socket) activeSocket = null;
+      });
+      socket.on('message', async (raw) => {
         try {
           const msg = JSON.parse(raw.toString());
           if (msg.type === 'submit') {
-            handleSubmission(msg);
+            await handleSubmission(msg);
             socket.send(JSON.stringify({ type: 'ack', timestamp: Date.now() }));
           }
         } catch (e) {
-          // ignore malformed messages
+          // ignore malformed messages or write errors
         }
       });
     });
@@ -156,4 +266,4 @@ tryListen(opts.port)
     process.exit(1);
   });
 
-export { server, wss, opts };
+export { server, wss, opts, activeSocket };

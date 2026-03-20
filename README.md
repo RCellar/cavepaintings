@@ -5,15 +5,18 @@ A browser-based interactive drawing canvas that integrates with Claude Code. Dra
 ## Features
 
 - **Drawing tools** -- rectangles, ellipses, arrows, freehand, text, and image paste (Ctrl+V)
+- **Object copy/paste** -- Ctrl+C / Ctrl+V to duplicate canvas objects (multi-select supported)
 - **Properties panel** -- fill, stroke, opacity, font size, z-ordering on selected objects
-- **Zoom & pan** -- scroll wheel to zoom, Alt+drag or middle-click to pan
+- **Zoom & pan** -- scroll wheel to zoom, Alt+drag or middle-click to pan, zoom indicator with click-to-reset
 - **Snap-to-grid** -- toggle a dot grid and objects snap to it when moved
 - **Undo/redo** -- full state stack with Ctrl+Z / Ctrl+Y
-- **Export/import** -- PNG, SVG, and JSON export; JSON re-import to restore diagrams
+- **Export/import** -- PNG (2x HiDPI), SVG, and JSON export; JSON re-import to restore diagrams
 - **Auto-save** -- canvas state persists in localStorage across browser refreshes
-- **Submit to Claude** -- sends a PNG screenshot + Fabric.js JSON + optional message to Claude Code over WebSocket
-- **Automatic notifications** -- a UserPromptSubmit hook detects new submissions and injects them into Claude's context when you send any message
+- **Submit to Claude** -- sends a 2x HiDPI PNG screenshot + Fabric.js JSON + optional message over WebSocket; Ctrl+Enter shortcut from the prompt field
+- **Automatic notifications** -- a UserPromptSubmit hook detects new submissions (including multiple between messages) and injects them into Claude's context with prompt text and object summaries
 - **Connection status** -- green/red indicator with automatic reconnect (exponential backoff)
+- **Canvas push API** -- Claude (or any harness) can programmatically place objects on the canvas via `POST /api/canvas`
+- **Submissions API** -- harness-agnostic `GET /api/submissions?since=<timestamp>` endpoint for polling new submissions
 
 ## Quick Start
 
@@ -48,8 +51,11 @@ The server automatically tries the next port if the default is in use.
 | T | Text |
 | I | Image (file picker) |
 | G | Toggle grid |
+| Ctrl+C | Copy selected object(s) |
+| Ctrl+V | Paste copied object(s) |
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
+| Ctrl+Enter | Submit to Claude (when prompt field is focused) |
 | Delete | Remove selected |
 | Alt+Drag | Pan canvas |
 
@@ -119,12 +125,13 @@ The canvas opens in your browser. Draw, paste screenshots, annotate -- then clic
 ### Submission flow
 
 1. Draw or paste an image on the canvas
-2. Click **Submit to Claude** (button briefly turns green with "Sent!")
-3. Type anything in Claude Code (even just "check")
-4. The plugin's `UserPromptSubmit` hook automatically detects the new submission and injects it into Claude's context
-5. Claude reads the PNG and responds
+2. Click **Submit to Claude** or press **Ctrl+Enter** in the prompt field
+3. The button shows "Sending..." while the server writes files, then "Sent!" on confirmation (or "Send failed" after 10s timeout)
+4. Type anything in Claude Code (even just "check")
+5. The plugin's `UserPromptSubmit` hook automatically detects new submissions and injects them into Claude's context -- including prompt text, object counts, and PNG paths
+6. Claude reads the PNG and responds
 
-The hook tracks the last-seen submission to avoid duplicate notifications.
+The hook tracks submissions by timestamp and surfaces all new submissions since the last check, so rapid double-submits are never lost.
 
 ## Architecture
 
@@ -133,13 +140,32 @@ Browser Canvas  --WebSocket-->  Node.js Server  --files-->  Claude Code
   (Fabric.js)                   (http + ws)                (skill reads files)
 ```
 
-- **server.js** -- HTTP static file server + WebSocket, state file lifecycle, cross-platform browser opening
-- **app.js** -- Fabric.js canvas with all drawing tools, properties, undo/redo, export/import, WebSocket client
-- **index.html + style.css** -- dark-themed UI with left toolbar, floating properties panel, bottom submit bar
+- **server.js** -- HTTP static file server + WebSocket + REST API, state file lifecycle, cross-platform browser opening
+- **app.js** -- Fabric.js canvas with all drawing tools, properties, undo/redo, export/import, WebSocket client with ack-based feedback
+- **index.html + style.css** -- dark/light themed UI with left toolbar, floating properties panel, bottom submit bar with zoom indicator
+- **vendor/fabric.min.js** -- locally bundled Fabric.js 6.5.1 (no CDN dependency)
 - **skills/cavepaintings/** -- start skill with SKILL.md + utility scripts (session check, server start)
 - **skills/cavepaintings-stop/** -- stop skill with SKILL.md + stop script
-- **hooks/** -- `UserPromptSubmit` hook that detects new canvas submissions
+- **hooks/** -- `UserPromptSubmit` hook that detects new canvas submissions with multi-submission tracking
 - **.claude-plugin/** -- plugin metadata for marketplace installation
+
+## REST API
+
+The server exposes two API endpoints for harness-agnostic integration:
+
+**Poll for submissions:**
+```bash
+curl http://localhost:9731/api/submissions?since=0
+```
+Returns all submissions newer than the given timestamp, with prompt text, file paths, and metadata.
+
+**Push objects to canvas:**
+```bash
+curl -X POST http://localhost:9731/api/canvas \
+  -H 'Content-Type: application/json' \
+  -d '{"diagram":{"objects":[{"type":"rect","left":50,"top":50,"width":100,"height":80,"fill":"#ff0000"}]},"mode":"merge"}'
+```
+Forwards Fabric.js objects to the connected browser client. Use `"mode": "merge"` to add to existing canvas or `"mode": "replace"` to clear and load.
 
 ## Running Tests
 
@@ -147,7 +173,7 @@ Browser Canvas  --WebSocket-->  Node.js Server  --files-->  Claude Code
 npm test
 ```
 
-Runs 7 tests across 4 suites (HTTP serving, WebSocket protocol, submission storage, server lifecycle, end-to-end flow).
+Runs 19 tests across 7 suites (HTTP serving, WebSocket protocol, submission storage, server lifecycle, start-server, end-to-end flow, API endpoints). Playwright browser tests (20 tests) are run separately with `npx playwright test`.
 
 ## Updating
 
@@ -168,7 +194,7 @@ Dependencies are installed automatically on session start via a `SessionStart` h
 
 ## Tech Stack
 
-- [Fabric.js](http://fabricjs.com/) 6.x (CDN, no build step)
+- [Fabric.js](http://fabricjs.com/) 6.5.1 (bundled locally, no CDN dependency)
 - Node.js with `http` and `ws` modules
 - Vanilla HTML/CSS/JS -- no framework, no bundler
 

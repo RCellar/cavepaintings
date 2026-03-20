@@ -14,12 +14,15 @@ let shapeOrigin = null;
 let activeShape = null;
 let undoStack = [];
 let redoStack = [];
+let canvasDirty = false;
 let gridVisible = false;
 let gridPattern = null;
 let autoSaveTimer = null;
 let brushColor = '#4a9eff';
 let brushWidth = 3;
+let clipboardObject = null;
 let currentTheme = 'dark';
+let pendingSubmitTimer = null;
 
 const themes = {
   dark: {
@@ -57,17 +60,23 @@ function initCanvas() {
   restoreFromLocalStorage();
   restoreTheme();
   connectWebSocket();
+  setupZoomIndicator();
 }
 
 // ---------------------------------------------------------------------------
 // Window resize
 // ---------------------------------------------------------------------------
+let resizeRAF = null;
 function handleResize() {
-  const availableHeight = window.innerHeight - 48;
-  const availableWidth = window.innerWidth - 56;
-  canvas.setWidth(availableWidth);
-  canvas.setHeight(availableHeight);
-  canvas.renderAll();
+  if (resizeRAF) return;
+  resizeRAF = requestAnimationFrame(() => {
+    resizeRAF = null;
+    canvas.setDimensions({
+      width: window.innerWidth - 56,
+      height: window.innerHeight - 48,
+    });
+    canvas.requestRenderAll();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +117,7 @@ function setTool(tool) {
 
   document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tool === tool);
+    btn.setAttribute('aria-pressed', String(btn.dataset.tool === tool));
   });
 }
 
@@ -224,7 +234,10 @@ function setupCanvasEvents() {
       });
       canvas.add(activeShape);
     } else if (currentTool === 'arrow') {
-      activeShape = createArrow(pointer.x, pointer.y, pointer.x, pointer.y);
+      activeShape = new fabric.Line(
+        [pointer.x, pointer.y, pointer.x, pointer.y],
+        { stroke: '#4a9eff', strokeWidth: 2, selectable: false, evented: false }
+      );
       canvas.add(activeShape);
     }
   });
@@ -265,11 +278,9 @@ function setupCanvasEvents() {
         ry,
       });
     } else if (currentTool === 'arrow') {
-      canvas.remove(activeShape);
-      activeShape = createArrow(ox, oy, pointer.x, pointer.y);
-      canvas.add(activeShape);
+      activeShape.set({ x2: pointer.x, y2: pointer.y });
     }
-    canvas.renderAll();
+    canvas.requestRenderAll();
   });
 
   canvas.on('mouse:up', function (opt) {
@@ -283,6 +294,27 @@ function setupCanvasEvents() {
 
     if (!isDrawingShape || !activeShape) return;
     isDrawingShape = false;
+
+    // Finalize arrow: replace temp line with grouped arrow+arrowhead
+    // Must be BEFORE the zero-size check — Line has no .width/.height
+    if (currentTool === 'arrow') {
+      const line = activeShape;
+      // Discard zero-length arrows (click without drag)
+      if (line.x1 === line.x2 && line.y1 === line.y2) {
+        canvas.remove(line);
+        activeShape = null;
+        shapeOrigin = null;
+        return;
+      }
+      const arrow = createArrow(line.x1, line.y1, line.x2, line.y2);
+      canvas.remove(line);
+      canvas.add(arrow);
+      canvas.setActiveObject(arrow);
+      activeShape = null;
+      shapeOrigin = null;
+      saveState();
+      return;
+    }
 
     // Discard zero-size shapes (click without drag)
     const w = activeShape.width ?? activeShape.rx ?? 0;
@@ -338,10 +370,15 @@ function setupCanvasEvents() {
 // Undo / Redo
 // ---------------------------------------------------------------------------
 function saveState() {
-  const json = JSON.stringify(canvas.toJSON());
-  undoStack.push(json);
-  if (undoStack.length > 50) undoStack.shift();
-  redoStack = [];
+  try {
+    const json = JSON.stringify(canvas.toJSON());
+    undoStack.push(json);
+    if (undoStack.length > 50) undoStack.shift();
+    redoStack = [];
+    persistCanvas(json);
+  } catch (err) {
+    console.warn('Failed to save canvas state:', err);
+  }
 }
 
 function undo() {
@@ -544,17 +581,17 @@ function setupToolbar() {
   if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
 
   document.getElementById('btn-export-png').addEventListener('click', () => {
-    downloadFile(canvas.toDataURL({ format: 'png', multiplier: 1 }), 'cavepaintings.png');
+    downloadFile(canvas.toDataURL({ format: 'png', multiplier: 2 }), 'cavepaintings.png');
   });
 
   document.getElementById('btn-export-svg').addEventListener('click', () => {
     const blob = new Blob([canvas.toSVG()], { type: 'image/svg+xml' });
-    downloadFile(URL.createObjectURL(blob), 'cavepaintings.svg');
+    downloadFile(URL.createObjectURL(blob), 'cavepaintings.svg', true);
   });
 
   document.getElementById('btn-export-json').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(canvas.toJSON(), null, 2)], { type: 'application/json' });
-    downloadFile(URL.createObjectURL(blob), 'cavepaintings.json');
+    downloadFile(URL.createObjectURL(blob), 'cavepaintings.json', true);
   });
 
   document.getElementById('btn-import-json').addEventListener('click', () => {
@@ -582,11 +619,12 @@ function setupToolbar() {
   });
 }
 
-function downloadFile(url, filename) {
+function downloadFile(url, filename, revoke = false) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   a.click();
+  if (revoke) setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
 function addImageFromDataUrl(dataUrl) {
@@ -614,6 +652,27 @@ function setupKeyboard() {
     if (e.ctrlKey || e.metaKey) {
       if (key === 'z') { e.preventDefault(); undo(); return; }
       if (key === 'y') { e.preventDefault(); redo(); return; }
+      if (key === 'c') {
+        const obj = canvas.getActiveObject();
+        if (obj) {
+          e.preventDefault();
+          obj.clone().then(cloned => { clipboardObject = cloned; });
+        }
+        return;
+      }
+      if (key === 'v') {
+        if (clipboardObject) {
+          e.preventDefault();
+          clipboardObject.clone().then(cloned => {
+            cloned.set({ left: cloned.left + 20, top: cloned.top + 20 });
+            canvas.add(cloned);
+            canvas.setActiveObject(cloned);
+            canvas.requestRenderAll();
+            saveState();
+          });
+        }
+        return;
+      }
     }
 
     const toolMap = { v: 'select', r: 'rect', e: 'ellipse', a: 'arrow', d: 'draw', t: 'text', i: 'image' };
@@ -655,15 +714,22 @@ function setupKeyboard() {
 // Auto-save / restore
 // ---------------------------------------------------------------------------
 function setupAutoSave() {
-  autoSaveTimer = setInterval(() => persistCanvas(), 30000);
-  canvas.on('object:modified', persistCanvas);
-  canvas.on('object:added', persistCanvas);
-  canvas.on('object:removed', persistCanvas);
-  canvas.on('path:created', persistCanvas);
+  canvas.on('object:modified', () => { canvasDirty = true; });
+  canvas.on('object:added', () => { canvasDirty = true; });
+  canvas.on('object:removed', () => { canvasDirty = true; });
+  canvas.on('path:created', () => { canvasDirty = true; });
+
+  autoSaveTimer = setInterval(() => {
+    if (canvasDirty) persistCanvas();
+  }, 30000);
 }
 
-function persistCanvas() {
-  localStorage.setItem('cavepaintings-canvas', JSON.stringify(canvas.toJSON()));
+function persistCanvas(json) {
+  try {
+    if (!json) json = JSON.stringify(canvas.toJSON());
+    localStorage.setItem('cavepaintings-canvas', json);
+  } catch { /* quota exceeded — silently ignore */ }
+  canvasDirty = false;
 }
 
 function restoreFromLocalStorage() {
@@ -708,7 +774,30 @@ function connectWebSocket() {
   ws.addEventListener('message', (event) => {
     try {
       const msg = JSON.parse(event.data);
-      console.log('WS message:', msg);
+      if (msg.type === 'ack') {
+        if (pendingSubmitTimer) {
+          clearTimeout(pendingSubmitTimer);
+          pendingSubmitTimer = null;
+        }
+        showSubmitFeedback();
+      }
+      if (msg.type === 'load') {
+        if (msg.mode === 'replace') {
+          canvas.loadFromJSON(msg.diagram, () => {
+            canvas.renderAll();
+            saveState();
+          });
+        } else {
+          const objects = msg.diagram?.objects || [];
+          if (objects.length > 0) {
+            fabric.util.enlivenObjects(objects).then(enlivened => {
+              enlivened.forEach(obj => canvas.add(obj));
+              canvas.renderAll();
+              saveState();
+            });
+          }
+        }
+      }
     } catch (_) {}
   });
 }
@@ -745,28 +834,68 @@ function submitToClaude() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
   const promptInput = document.getElementById('prompt-input');
-  const payload = {
-    type: 'submit',
-    image: canvas.toDataURL(),
-    diagram: canvas.toJSON(),
-    prompt: promptInput.value,
-  };
+  const btn = document.getElementById('btn-submit');
+
+  let payload;
+  try {
+    payload = {
+      type: 'submit',
+      image: canvas.toDataURL({ format: 'png', multiplier: 2 }),
+      diagram: canvas.toJSON(),
+      prompt: promptInput.value,
+    };
+  } catch (err) {
+    console.error('Failed to serialize canvas:', err);
+    return;
+  }
+
+  // Show sending state
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
 
   ws.send(JSON.stringify(payload));
-  showSubmitFeedback();
+
+  // Timeout: if no ack in 10s, show failure
+  pendingSubmitTimer = setTimeout(() => {
+    pendingSubmitTimer = null;
+    btn.textContent = 'Send failed';
+    btn.style.background = '#e94560';
+    setTimeout(() => {
+      btn.textContent = 'Submit to Claude';
+      btn.style.background = '';
+      btn.disabled = false;
+    }, 2000);
+  }, 10000);
 }
 
 function showSubmitFeedback() {
   const btn = document.getElementById('btn-submit');
   const promptInput = document.getElementById('prompt-input');
-  const original = btn.textContent;
   btn.style.background = '#50c878';
   btn.textContent = 'Sent!';
   promptInput.value = '';
   setTimeout(() => {
     btn.style.background = '';
-    btn.textContent = original;
+    btn.textContent = 'Submit to Claude';
+    btn.disabled = false;
   }, 1500);
+}
+
+// ---------------------------------------------------------------------------
+// Zoom indicator
+// ---------------------------------------------------------------------------
+function setupZoomIndicator() {
+  const zoomEl = document.getElementById('zoom-level');
+  if (!zoomEl) return;
+
+  canvas.on('mouse:wheel', () => {
+    zoomEl.textContent = Math.round(canvas.getZoom() * 100) + '%';
+  });
+
+  zoomEl.addEventListener('click', () => {
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    zoomEl.textContent = '100%';
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -775,5 +904,11 @@ function showSubmitFeedback() {
 document.addEventListener('DOMContentLoaded', function () {
   initCanvas();
   document.getElementById('btn-submit').addEventListener('click', submitToClaude);
+  document.getElementById('prompt-input').addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      submitToClaude();
+    }
+  });
   window.addEventListener('resize', handleResize);
 });
