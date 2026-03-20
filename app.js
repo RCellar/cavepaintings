@@ -116,12 +116,24 @@ function createArrow(x1, y1, x2, y2) {
 }
 
 // ---------------------------------------------------------------------------
-// Canvas event handlers (drawing only – zoom/pan added in commit 2)
+// Canvas event handlers
 // ---------------------------------------------------------------------------
 function setupCanvasEvents() {
+  let isPanning = false;
+  let panStart = { x: 0, y: 0 };
+
   canvas.on('mouse:down', function (opt) {
     const e = opt.e;
     const pointer = canvas.getScenePoint(e);
+
+    // Middle mouse button or Alt+left-drag = pan
+    if (e.button === 1 || (e.altKey && e.button === 0)) {
+      isPanning = true;
+      panStart = { x: e.clientX, y: e.clientY };
+      canvas.defaultCursor = 'grabbing';
+      e.preventDefault();
+      return;
+    }
 
     if (currentTool === 'select' || currentTool === 'draw') return;
 
@@ -181,6 +193,17 @@ function setupCanvasEvents() {
   });
 
   canvas.on('mouse:move', function (opt) {
+    const e = opt.e;
+
+    // Panning
+    if (isPanning) {
+      const dx = e.clientX - panStart.x;
+      const dy = e.clientY - panStart.y;
+      panStart = { x: e.clientX, y: e.clientY };
+      canvas.relativePan(new fabric.Point(dx, dy));
+      return;
+    }
+
     if (!isDrawingShape || !activeShape) return;
     const pointer = canvas.getScenePoint(opt.e);
     const ox = shapeOrigin.x;
@@ -212,7 +235,15 @@ function setupCanvasEvents() {
     canvas.renderAll();
   });
 
-  canvas.on('mouse:up', function () {
+  canvas.on('mouse:up', function (opt) {
+    const e = opt.e;
+
+    if (isPanning) {
+      isPanning = false;
+      canvas.defaultCursor = currentTool === 'select' ? 'default' : 'crosshair';
+      return;
+    }
+
     if (!isDrawingShape || !activeShape) return;
     isDrawingShape = false;
     activeShape.set({ selectable: true, evented: true });
@@ -220,6 +251,28 @@ function setupCanvasEvents() {
     activeShape = null;
     shapeOrigin = null;
     saveState();
+  });
+
+  // Scroll wheel zoom (0.1x – 10x, zoom to cursor point)
+  canvas.on('mouse:wheel', function (opt) {
+    const e = opt.e;
+    e.preventDefault();
+    e.stopPropagation();
+    let zoom = canvas.getZoom();
+    zoom *= 0.999 ** e.deltaY;
+    zoom = Math.min(10, Math.max(0.1, zoom));
+    canvas.zoomToPoint(new fabric.Point(e.offsetX, e.offsetY), zoom);
+  });
+
+  // Snap to grid on move
+  canvas.on('object:moving', function (opt) {
+    if (!gridVisible) return;
+    const obj = opt.target;
+    const gridSize = 24;
+    obj.set({
+      left: Math.round(obj.left / gridSize) * gridSize,
+      top: Math.round(obj.top / gridSize) * gridSize,
+    });
   });
 
   // Selection events
