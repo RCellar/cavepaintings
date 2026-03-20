@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // UserPromptSubmit hook: check for new cavepaintings submissions and notify Claude.
 // Tracks last-seen submission timestamp to surface ALL new submissions (not just newest).
+// Wrapped in try/catch because the server shutdown may delete files while this runs.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+
+try {
 
 const submissionsDir = path.join(os.tmpdir(), 'cavepaintings', 'submissions');
 const stateFile = path.join(os.tmpdir(), 'cavepaintings', 'state.json');
@@ -14,9 +17,14 @@ if (!fs.existsSync(stateFile) || !fs.existsSync(submissionsDir)) {
   process.exit(0);
 }
 
-const jsonFiles = fs.readdirSync(submissionsDir)
-  .filter(f => f.endsWith('.json'))
-  .sort();
+let jsonFiles;
+try {
+  jsonFiles = fs.readdirSync(submissionsDir)
+    .filter(f => f.endsWith('.json'))
+    .sort();
+} catch {
+  process.exit(0); // Directory deleted mid-read (server shutting down)
+}
 
 if (jsonFiles.length === 0) {
   process.exit(0);
@@ -89,3 +97,8 @@ console.log(JSON.stringify({
     additionalContext: context,
   },
 }));
+
+} catch {
+  // Server shutdown may delete files while this hook runs — silently exit
+  process.exit(0);
+}
