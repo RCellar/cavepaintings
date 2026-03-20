@@ -268,20 +268,20 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 async function handleSubmission(msg) {
-  await fs.promises.mkdir(SUBMISSIONS_DIR, { recursive: true });
+  await fs.promises.mkdir(SUBMISSIONS_DIR, { recursive: true, mode: 0o700 });
   const timestamp = Date.now();
   const baseName = `submission-${timestamp}`;
 
   if (msg.image) {
     const base64Data = msg.image.replace(/^data:image\/\w+;base64,/, '');
-    await fs.promises.writeFile(path.join(SUBMISSIONS_DIR, `${baseName}.png`), Buffer.from(base64Data, 'base64'));
+    await fs.promises.writeFile(path.join(SUBMISSIONS_DIR, `${baseName}.png`), Buffer.from(base64Data, 'base64'), { mode: 0o600 });
   }
 
   await fs.promises.writeFile(path.join(SUBMISSIONS_DIR, `${baseName}.json`), JSON.stringify({
     prompt: msg.prompt || '',
     diagram: msg.diagram || {},
     timestamp,
-  }, null, 2));
+  }, null, 2), { mode: 0o600 });
 }
 
 function verifyOrigin(origin) {
@@ -360,8 +360,14 @@ tryListen(opts.port)
     });
 
     if (!noState) {
-      fs.mkdirSync(STATE_DIR, { recursive: true });
-      fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url, projectDir }, null, 2));
+      fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 });
+      try {
+        const stat = fs.statSync(STATE_DIR);
+        if ((stat.mode & 0o777) !== 0o700) {
+          fs.chmodSync(STATE_DIR, 0o700);
+        }
+      } catch { /* ignore */ }
+      fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url, projectDir }, null, 2), { mode: 0o600 });
     }
     if (opts.open) openBrowser(url);
   })

@@ -1,6 +1,8 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -208,5 +210,59 @@ describe('WebSocket Origin Checking', () => {
       ws.on('unexpected-response', () => resolve('rejected'));
       ws.on('open', () => reject(new Error('Should not have connected')));
     });
+  });
+});
+
+describe('File Permissions', () => {
+  let proc;
+  const PORT = 19753;
+  const SUBMISSIONS_DIR = path.join(os.tmpdir(), 'cavepaintings', 'submissions');
+  const STATE_DIR = path.join(os.tmpdir(), 'cavepaintings');
+
+  before(async () => {
+    if (fs.existsSync(SUBMISSIONS_DIR)) fs.rmSync(SUBMISSIONS_DIR, { recursive: true });
+    proc = spawn('node', ['server.js', '--port', String(PORT), '--no-open'], {
+      cwd: ROOT,
+      env: { ...process.env },
+    });
+    await new Promise((resolve) => {
+      proc.stdout.on('data', (data) => {
+        if (data.toString().includes('listening')) resolve();
+      });
+      setTimeout(resolve, 2000);
+    });
+  });
+
+  after(() => { proc?.kill(); });
+
+  it('creates state directory with 0700 permissions', () => {
+    const stat = fs.statSync(STATE_DIR);
+    const mode = stat.mode & 0o777;
+    assert.strictEqual(mode, 0o700, `Expected 0700, got ${mode.toString(8)}`);
+  });
+
+  it('creates submission files with 0600 permissions', async () => {
+    const ws = new WebSocket(`ws://localhost:${PORT}`);
+    await new Promise((resolve) => ws.on('open', resolve));
+    const ackPromise = new Promise((resolve) => {
+      ws.on('message', (data) => resolve(JSON.parse(data.toString())));
+    });
+    ws.send(JSON.stringify({
+      type: 'submit',
+      image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==',
+      diagram: { objects: [] },
+      prompt: 'permission test',
+    }));
+    await ackPromise;
+    ws.close();
+    await new Promise(r => setTimeout(r, 200));
+
+    const files = fs.readdirSync(SUBMISSIONS_DIR);
+    assert.ok(files.length > 0, 'No submission files created');
+    for (const file of files) {
+      const stat = fs.statSync(path.join(SUBMISSIONS_DIR, file));
+      const mode = stat.mode & 0o777;
+      assert.strictEqual(mode, 0o600, `File ${file} has mode ${mode.toString(8)}, expected 0600`);
+    }
   });
 });
