@@ -23,6 +23,19 @@ const MIME_TYPES = {
   '.svg': 'image/svg+xml',
 };
 
+const SECURITY_HEADERS = {
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'self' https: ws://localhost:* wss://localhost:*",
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+};
+
+function setSecurityHeaders(res) {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    res.setHeader(key, value);
+  }
+}
+
 function parseArgs(args) {
   const opts = { port: 9731, open: true };
   for (let i = 0; i < args.length; i++) {
@@ -158,6 +171,7 @@ function handleApi(req, res) {
 
 const opts = parseArgs(process.argv.slice(2));
 const server = http.createServer((req, res) => {
+  setSecurityHeaders(res);
   if (req.url?.startsWith('/api/')) {
     return handleApi(req, res);
   }
