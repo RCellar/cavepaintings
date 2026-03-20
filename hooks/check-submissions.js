@@ -1,6 +1,11 @@
 #!/usr/bin/env node
-// PostToolUse hook: check for new cavepaintings submissions and notify Claude
+// UserPromptSubmit hook: check for new cavepaintings submissions and notify Claude.
+// Fires when the user sends any message, injecting canvas context before Claude responds.
 // Tracks last-seen submission to avoid duplicate notifications.
+//
+// Previously used PostToolUse, but that only fires during active tool work —
+// it can't notify an idle session. UserPromptSubmit fires on any user input,
+// so the user just needs to type anything (e.g. "check") after submitting.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -55,7 +60,7 @@ const prompt = submission.prompt
 
 console.log(JSON.stringify({
   hookSpecificOutput: {
-    hookEventName: 'PostToolUse',
+    hookEventName: 'UserPromptSubmit',
     additionalContext: `[Cavepaintings Submission Received] A new canvas submission arrived. ${prompt} The PNG screenshot is at: ${pngPath} — read it with the Read tool to see the visual. The diagram JSON is at: ${jsonPath}`,
   },
 }));
