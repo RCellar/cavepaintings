@@ -32,12 +32,45 @@ function parseArgs(args) {
 }
 
 function serveStatic(req, res) {
-  let filePath = req.url === '/' ? '/index.html' : req.url;
-  filePath = path.join(__dirname, filePath);
-  const ext = path.extname(filePath);
+  let parsed;
+  try {
+    parsed = new URL(req.url, 'http://localhost');
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  // Reject invalid percent-encoding sequences
+  try {
+    decodeURIComponent(parsed.pathname);
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'text/plain' });
+    res.end('Bad Request');
+    return;
+  }
+
+  // Block path traversal — reject raw URLs containing '..' segments
+  if (req.url.split('?')[0].split('/').some((seg) => seg === '..' || seg === '.')) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const pathname = parsed.pathname === '/' ? '/index.html' : parsed.pathname;
+  const resolved = path.resolve(__dirname, '.' + pathname);
+
+  // Block path traversal — resolved path must be inside __dirname
+  if (!resolved.startsWith(__dirname + path.sep) && resolved !== __dirname) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('Forbidden');
+    return;
+  }
+
+  const ext = path.extname(resolved);
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
 
-  fs.readFile(filePath, (err, data) => {
+  fs.readFile(resolved, (err, data) => {
     if (err) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('Not Found');

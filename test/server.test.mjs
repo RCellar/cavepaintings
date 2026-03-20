@@ -49,6 +49,41 @@ describe('HTTP Server', () => {
     const res = await fetch(`http://localhost:${PORT}/nonexistent`);
     assert.strictEqual(res.status, 404);
   });
+
+  it('blocks path traversal attempts', async () => {
+    const net = await import('node:net');
+    const response = await new Promise((resolve) => {
+      const client = net.connect(PORT, '127.0.0.1', () => {
+        client.write('GET /../../../etc/passwd HTTP/1.1\r\nHost: localhost\r\n\r\n');
+        let data = '';
+        client.on('data', (chunk) => data += chunk.toString());
+        client.on('end', () => resolve(data));
+        setTimeout(() => { client.end(); resolve(data); }, 1000);
+      });
+    });
+    assert.ok(!response.includes('200'), 'Should not return 200 for traversal');
+    assert.ok(response.includes('403') || response.includes('400'), 'Should return 403 or 400');
+  });
+
+  it('serves files with query strings correctly', async () => {
+    const res = await fetch(`http://localhost:${PORT}/style.css?v=123`);
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.headers['content-type'].includes('text/css'));
+  });
+
+  it('returns 400 for malformed URLs', async () => {
+    const net = await import('node:net');
+    const response = await new Promise((resolve) => {
+      const client = net.connect(PORT, '127.0.0.1', () => {
+        client.write('GET /%ZZ HTTP/1.1\r\nHost: localhost\r\n\r\n');
+        let data = '';
+        client.on('data', (chunk) => data += chunk.toString());
+        client.on('end', () => resolve(data));
+        setTimeout(() => { client.end(); resolve(data); }, 1000);
+      });
+    });
+    assert.ok(response.includes('400'), 'Should return 400 for malformed URL');
+  });
 });
 
 describe('WebSocket Server', () => {
