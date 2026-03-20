@@ -154,9 +154,7 @@ Runs 7 tests across 4 suites (HTTP serving, WebSocket protocol, submission stora
 After making changes to the plugin:
 
 ```bash
-npm run bump 0.2.0                          # updates version in package.json, plugin.json, marketplace.json + refreshes local cache
-git add -A && git commit -m "chore: bump to 0.2.0"
-git push
+npm run release 0.2.0    # bumps version, commits, pushes, cleans old cache versions
 ```
 
 Then in Claude Code:
@@ -165,6 +163,8 @@ Then in Claude Code:
 /plugin update cavepaintings@cavepaintings-marketplace
 /reload-plugins
 ```
+
+Dependencies are installed automatically on session start via a `SessionStart` hook, so users never need to run `npm install` manually.
 
 ## Tech Stack
 

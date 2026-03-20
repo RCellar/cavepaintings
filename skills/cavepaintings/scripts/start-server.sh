@@ -24,7 +24,19 @@ if [[ -n "${MSYSTEM:-}" ]]; then FOREGROUND="true"; fi
 
 # Install dependencies if needed
 if [[ ! -d "$PROJECT_ROOT/node_modules" ]]; then
-  npm install --omit=dev --prefix "$PROJECT_ROOT" > /dev/null 2>&1
+  if ! command -v npm &>/dev/null; then
+    echo '{"error": "npm is not installed. Install Node.js (v18+) from https://nodejs.org"}'
+    exit 1
+  fi
+  if ! npm install --omit=dev --prefix "$PROJECT_ROOT" 2>&1; then
+    echo '{"error": "npm install failed. Check network connectivity and try again."}'
+    exit 1
+  fi
+fi
+
+if ! command -v node &>/dev/null; then
+  echo '{"error": "node is not installed. Install Node.js (v18+) from https://nodejs.org"}'
+  exit 1
 fi
 
 # Kill existing session if running

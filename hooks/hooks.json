@@ -1,5 +1,17 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/setup.js\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "matcher": "",

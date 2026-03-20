@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
-    "bump": "bash scripts/bump-version.sh"
+    "bump": "bash scripts/bump-version.sh",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
     "ws": "^8.18.0"
