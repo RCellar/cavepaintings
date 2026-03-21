@@ -1,5 +1,7 @@
 /* global fabric */
 
+import { setupConnectorLifecycle, reconnectConnectors } from './connectors.js';
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -70,7 +72,11 @@ export function initCanvas() {
   // propertiesToInclude argument to each object, so we inject the custom
   // properties at the prototype level instead.
   const _origToObject = fabric.FabricObject.prototype.toObject;
-  const _caveProps = ['caveId', 'caveName'];
+  const _caveProps = [
+    'caveId', 'caveName',
+    'isConnector', 'sourceId', 'sourceAnchor', 'targetId', 'targetAnchor',
+    'showArrow', 'connectorStroke', 'connectorStrokeWidth', 'connectorDash',
+  ];
   fabric.FabricObject.prototype.toObject = function (additionalProps) {
     const base = _origToObject.call(this, additionalProps);
     _caveProps.forEach((prop) => {
@@ -84,6 +90,9 @@ export function initCanvas() {
       e.target.caveId = crypto.randomUUID();
     }
   });
+
+  // Wire connector lifecycle events
+  setupConnectorLifecycle(canvas);
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +143,7 @@ export function undo() {
   const previous = undoStack[undoStack.length - 1];
   isLoadingState = true;
   canvas.loadFromJSON(JSON.parse(previous)).then(() => {
+    reconnectConnectors(canvas);
     canvas.renderAll();
     canvas.requestRenderAll();
     isLoadingState = false;
@@ -146,6 +156,7 @@ export function redo() {
   undoStack.push(next);
   isLoadingState = true;
   canvas.loadFromJSON(JSON.parse(next)).then(() => {
+    reconnectConnectors(canvas);
     canvas.renderAll();
     canvas.requestRenderAll();
     isLoadingState = false;
@@ -247,6 +258,7 @@ export function restoreFromLocalStorage() {
   try {
     isLoadingState = true;
     canvas.loadFromJSON(JSON.parse(saved)).then(() => {
+      reconnectConnectors(canvas);
       canvas.renderAll();
       isLoadingState = false;
       // Reset undo stack to start from the restored state

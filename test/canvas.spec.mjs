@@ -578,3 +578,129 @@ test.describe('Responsive Layout', () => {
     expect(box.height).toBeGreaterThan(box.width);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Connector System
+// ---------------------------------------------------------------------------
+test.describe('Connector System', () => {
+  test('C key switches to connector tool', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.press('body', 'c');
+    const btn = page.locator('.tool-btn[data-tool="connector"]');
+    await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('connector button exists in toolbar', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForSelector('.tool-btn[data-tool="connector"]');
+    await expect(page.locator('.tool-btn[data-tool="connector"]')).toBeVisible();
+  });
+
+  test('moving source object updates connector position', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+
+    // Create two rectangles and a connector programmatically
+    const connectorLeft = await page.evaluate(() => {
+      const r1 = new fabric.Rect({
+        left: 50, top: 50, width: 80, height: 80,
+        fill: '#ff0000', stroke: '#fff', strokeWidth: 1,
+      });
+      const r2 = new fabric.Rect({
+        left: 300, top: 50, width: 80, height: 80,
+        fill: '#00ff00', stroke: '#fff', strokeWidth: 1,
+      });
+      canvas.add(r1);
+      canvas.add(r2);
+      canvas.renderAll();
+
+      // Import createConnector via the module — it's already loaded
+      // Use the global reference to connectors module
+      const sourceId = r1.caveId;
+      const targetId = r2.caveId;
+
+      // We need to call createConnector. Since modules are loaded, access via import.
+      // Instead, simulate by calling the function directly from the window.
+      // The module system doesn't expose globals, so we'll create the connector manually.
+      // Actually, let's use dynamic import or access the module's exports through the app.
+      // Simplest: call through a helper we know is wired up.
+      return { sourceId, targetId };
+    });
+
+    // Create connector by importing the module in-page
+    await page.evaluate(async ({ sourceId, targetId }) => {
+      const mod = await import('./connectors.js');
+      mod.createConnector(sourceId, 'right', targetId, 'left', canvas);
+      canvas.renderAll();
+    }, connectorLeft);
+
+    // Get initial connector position
+    const initialPos = await page.evaluate(() => {
+      const conn = canvas.getObjects().find(o => o.isConnector);
+      return conn ? { left: conn.left, top: conn.top } : null;
+    });
+    expect(initialPos).not.toBeNull();
+
+    // Move source object
+    await page.evaluate(() => {
+      const r1 = canvas.getObjects().find(o => !o.isConnector && o.fill === '#ff0000');
+      r1.set({ left: 50, top: 200 });
+      r1.setCoords();
+      canvas.fire('object:moving', { target: r1 });
+      canvas.renderAll();
+    });
+
+    // Check connector position changed
+    const newPos = await page.evaluate(() => {
+      const conn = canvas.getObjects().find(o => o.isConnector);
+      return conn ? { left: conn.left, top: conn.top } : null;
+    });
+    expect(newPos).not.toBeNull();
+    // Position should have changed (connector was rerouted)
+    expect(newPos.left !== initialPos.left || newPos.top !== initialPos.top).toBe(true);
+  });
+
+  test('deleting an object removes its connectors', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+
+    // Create two rectangles and a connector
+    await page.evaluate(async () => {
+      const r1 = new fabric.Rect({
+        left: 50, top: 50, width: 80, height: 80,
+        fill: '#ff0000', stroke: '#fff', strokeWidth: 1,
+      });
+      const r2 = new fabric.Rect({
+        left: 300, top: 50, width: 80, height: 80,
+        fill: '#00ff00', stroke: '#fff', strokeWidth: 1,
+      });
+      canvas.add(r1);
+      canvas.add(r2);
+      canvas.renderAll();
+
+      const mod = await import('./connectors.js');
+      mod.createConnector(r1.caveId, 'right', r2.caveId, 'left', canvas);
+      canvas.renderAll();
+    });
+
+    // Verify connector exists
+    const beforeCount = await page.evaluate(() =>
+      canvas.getObjects().filter(o => o.isConnector).length
+    );
+    expect(beforeCount).toBe(1);
+
+    // Remove one of the rectangles
+    await page.evaluate(() => {
+      const r1 = canvas.getObjects().find(o => !o.isConnector && o.fill === '#ff0000');
+      canvas.remove(r1);
+      canvas.renderAll();
+    });
+
+    // Connector should be gone
+    const afterCount = await page.evaluate(() =>
+      canvas.getObjects().filter(o => o.isConnector).length
+    );
+    expect(afterCount).toBe(0);
+  });
+});

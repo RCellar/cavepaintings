@@ -8,6 +8,11 @@ import {
 } from './canvas-core.js';
 import { updatePropertiesPanel } from './properties.js';
 import { addImageFromDataUrl } from './image-utils.js';
+import {
+  activateConnectorTool, deactivateConnectorTool,
+  connectorMouseDown, connectorMouseMove, connectorCancel,
+  reconnectConnectors,
+} from './connectors.js';
 
 // ---------------------------------------------------------------------------
 // Local state
@@ -24,7 +29,13 @@ let polygonPreviewLines = [];
 // ---------------------------------------------------------------------------
 export function setTool(tool) {
   const canvas = getCanvas();
+  const prevTool = getCurrentTool();
   setCurrentTool(tool);
+
+  // Deactivate connector tool overlay when switching away
+  if (prevTool === 'connector' && tool !== 'connector') {
+    deactivateConnectorTool();
+  }
 
   canvas.isDrawingMode = tool === 'draw';
 
@@ -33,6 +44,11 @@ export function setTool(tool) {
     canvas.skipTargetFind = false;
     canvas.defaultCursor = 'default';
     canvas.hoverCursor = 'move';
+  } else if (tool === 'connector') {
+    canvas.selection = false;
+    canvas.discardActiveObject();
+    activateConnectorTool();
+    canvas.renderAll();
   } else {
     canvas.selection = false;
     canvas.skipTargetFind = true;
@@ -207,6 +223,11 @@ export function setupCanvasEvents() {
 
     if (currentTool === 'select' || currentTool === 'draw') return;
 
+    if (currentTool === 'connector') {
+      connectorMouseDown(pointer);
+      return;
+    }
+
     if (currentTool === 'polygon') {
       // Check close conditions
       if (polygonPoints.length >= 3) {
@@ -302,6 +323,12 @@ export function setupCanvasEvents() {
       const dy = e.clientY - panStart.y;
       panStart = { x: e.clientX, y: e.clientY };
       canvas.relativePan(new fabric.Point(dx, dy));
+      return;
+    }
+
+    if (currentTool === 'connector') {
+      const ptr = canvas.getScenePoint(opt.e);
+      connectorMouseMove(ptr);
       return;
     }
 
@@ -489,7 +516,7 @@ export function setupToolbar() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = e => {
-      canvas.loadFromJSON(JSON.parse(e.target.result)).then(() => { canvas.renderAll(); saveState(); });
+      canvas.loadFromJSON(JSON.parse(e.target.result)).then(() => { reconnectConnectors(canvas); canvas.renderAll(); saveState(); });
     };
     reader.readAsText(file);
     this.value = '';
@@ -555,9 +582,9 @@ export function setupKeyboard() {
       }
     }
 
-    const toolMap = { v: 'select', r: 'rect', e: 'ellipse', a: 'arrow', l: 'line', p: 'polygon', d: 'draw', t: 'text', i: 'image' };
+    const toolMap = { v: 'select', r: 'rect', e: 'ellipse', a: 'arrow', l: 'line', p: 'polygon', d: 'draw', t: 'text', i: 'image', c: 'connector' };
     if (key === 'g') { toggleGrid(); return; }
-    if (key === 'escape') { cancelPolygon(); return; }
+    if (key === 'escape') { cancelPolygon(); connectorCancel(); return; }
     if (toolMap[key]) { setTool(toolMap[key]); return; }
 
     if (key === 'delete' || key === 'backspace') {

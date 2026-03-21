@@ -5,6 +5,7 @@ import {
   setIsLoadingState,
   saveState,
 } from './canvas-core.js';
+import { reconnectConnectors } from './connectors.js';
 
 // ---------------------------------------------------------------------------
 // Local state
@@ -58,6 +59,7 @@ export function connectWebSocket() {
         if (msg.mode === 'replace') {
           setIsLoadingState(true);
           canvas.loadFromJSON(msg.diagram).then(() => {
+            reconnectConnectors(canvas);
             canvas.renderAll();
             canvas.requestRenderAll();
             setIsLoadingState(false);
