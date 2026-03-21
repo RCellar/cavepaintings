@@ -374,6 +374,13 @@ export function deleteConnectorsFor(canvas, caveId) {
 }
 
 // ---------------------------------------------------------------------------
+// clearConnectorIndex — clear the connector index
+// ---------------------------------------------------------------------------
+export function clearConnectorIndex() {
+  connectorIndex.clear();
+}
+
+// ---------------------------------------------------------------------------
 // reconnectConnectors — rebuild index from existing objects after loadFromJSON
 // ---------------------------------------------------------------------------
 export function reconnectConnectors(canvas) {

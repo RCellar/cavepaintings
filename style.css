@@ -264,6 +264,19 @@ body[data-theme="light"] #zoom-level:hover {
   color: #1a1a2e;
 }
 
+#version-label {
+  font-family: monospace;
+  font-size: 11px;
+  color: #606080;
+  user-select: none;
+  white-space: nowrap;
+}
+
+[data-theme="light"] #version-label,
+body[data-theme="light"] #version-label {
+  color: #909098;
+}
+
 #prompt-input {
   flex: 1;
   height: 32px;
@@ -402,52 +415,6 @@ body[data-theme="light"] .prop-actions button:hover {
   color: #1a1a2e;
 }
 
-/* Responsive — Tablet (<768px) */
-@media (max-width: 767px) {
-  #app { flex-direction: column; }
-
-  #toolbar {
-    width: 100%;
-    height: auto;
-    flex-direction: row;
-    border-right: none;
-    border-bottom: 1px solid #0f3460;
-    padding: 4px 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-
-  .tool-group { flex-direction: row; }
-
-  .tool-separator {
-    width: 1px;
-    height: 32px;
-    margin: 0 4px;
-  }
-
-  .tool-btn {
-    width: 44px;
-    height: 44px;
-  }
-
-  #bottom-bar { left: 0; }
-
-  #canvas-container { touch-action: none; }
-
-  #properties-panel, #brush-panel {
-    position: fixed;
-    bottom: 48px;
-    left: 0;
-    right: 0;
-    top: auto;
-    width: 100%;
-    max-height: 40vh;
-    border-radius: 12px 12px 0 0;
-    z-index: 20;
-    overflow-y: auto;
-  }
-}
-
 /* Context menu for touch long-press */
 .context-menu {
   position: fixed;
@@ -573,4 +540,63 @@ body[data-theme="light"] .object-rename-input {
 #toast.visible {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* Responsive — Tablet (<768px) */
+@media (max-width: 767px) {
+  #app { flex-direction: column; }
+
+  #toolbar {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    border-right: none;
+    border-bottom: 1px solid #0f3460;
+    padding: 4px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .tool-group { flex-direction: row; }
+
+  .tool-separator {
+    width: 1px;
+    height: 32px;
+    margin: 0 4px;
+  }
+
+  .tool-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  #bottom-bar { left: 0; }
+
+  #canvas-container { touch-action: none; }
+
+  #properties-panel, #brush-panel {
+    position: fixed;
+    bottom: 48px;
+    left: 0;
+    right: 0;
+    top: auto;
+    width: 100%;
+    max-height: 40vh;
+    border-radius: 12px 12px 0 0;
+    z-index: 20;
+    overflow-y: auto;
+  }
+
+  #object-list-panel {
+    position: fixed;
+    bottom: 48px;
+    left: 0;
+    right: 0;
+    top: auto;
+    width: 100%;
+    max-height: 40vh;
+    border-radius: 12px 12px 0 0;
+    z-index: 20;
+    overflow-y: auto;
+  }
 }

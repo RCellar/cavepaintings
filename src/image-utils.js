@@ -1,6 +1,7 @@
 /* global fabric */
 
 import { getCanvas, saveState } from './canvas-core.js';
+import { showToast, hideToast } from './toast.js';
 
 const IMAGE_URL_REGEX = /^https?:\/\/\S+\.(png|jpg|jpeg|gif|webp|svg)(\?\S*)?$/i;
 
@@ -114,19 +115,3 @@ function loadImageFromUrl(url) {
     });
 }
 
-function showToast(msg, duration) {
-  let toast = document.getElementById('toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'toast';
-    toast.setAttribute('role', 'alert');
-    document.body.appendChild(toast);
-  }
-  toast.textContent = msg;
-  toast.classList.add('visible');
-  if (duration) setTimeout(() => toast.classList.remove('visible'), duration);
-}
-
-function hideToast() {
-  document.getElementById('toast')?.classList.remove('visible');
-}

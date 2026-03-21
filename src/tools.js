@@ -8,9 +8,11 @@ import {
 } from './canvas-core.js';
 import { updatePropertiesPanel } from './properties.js';
 import { addImageFromDataUrl } from './image-utils.js';
+import { showToast } from './toast.js';
 import {
   activateConnectorTool, deactivateConnectorTool,
   connectorMouseDown, connectorMouseMove, connectorCancel,
+  clearConnectorIndex,
   reconnectConnectors,
 } from './connectors.js';
 
@@ -187,19 +189,6 @@ export function cancelPolygon() {
   canvas.renderAll();
 }
 
-function showToast(message, duration = 3000) {
-  let toast = document.getElementById('toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'toast';
-    toast.setAttribute('role', 'alert');
-    toast.setAttribute('aria-live', 'polite');
-    document.body.appendChild(toast);
-  }
-  toast.textContent = message;
-  toast.classList.add('visible');
-  setTimeout(() => toast.classList.remove('visible'), duration);
-}
 
 // ---------------------------------------------------------------------------
 // Canvas event handlers
@@ -482,6 +471,7 @@ export function setupToolbar() {
   document.getElementById('btn-clear').addEventListener('click', () => {
     if (confirm('Clear the canvas? This cannot be undone.')) {
       canvas.clear();
+      clearConnectorIndex();
       canvas.backgroundColor = getGridVisible() ? getGridPattern() : themes[getCurrentTheme()].canvasBg;
       canvas.renderAll();
       clearUndoStacks();

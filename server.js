@@ -24,7 +24,7 @@ const MIME_TYPES = {
 };
 
 const SECURITY_HEADERS = {
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'self' https: ws://localhost:* wss://localhost:*",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'self' https: ws://localhost:* wss://localhost:*",
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
@@ -82,10 +82,11 @@ function checkRateLimit(req, res) {
 }
 
 function parseArgs(args) {
-  const opts = { port: 9731, open: true };
+  const opts = { port: 9731, open: true, maxSubmissions: 50 };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--port' && args[i + 1]) opts.port = parseInt(args[i + 1], 10);
     if (args[i] === '--no-open') opts.open = false;
+    if (args[i] === '--max-submissions' && args[i + 1]) opts.maxSubmissions = parseInt(args[i + 1], 10);
   }
   return opts;
 }
@@ -328,6 +329,22 @@ async function handleSubmission(msg) {
     diagram: msg.diagram || {},
     timestamp,
   }, null, 2), { mode: 0o600 });
+  cleanupSubmissions(opts.maxSubmissions);
+}
+
+function cleanupSubmissions(maxSubmissions) {
+  if (!fs.existsSync(SUBMISSIONS_DIR)) return;
+  const jsonFiles = fs.readdirSync(SUBMISSIONS_DIR)
+    .filter(f => f.endsWith('.json'))
+    .sort();
+  const excess = jsonFiles.length - maxSubmissions;
+  if (excess <= 0) return;
+  for (let i = 0; i < excess; i++) {
+    const jsonPath = path.join(SUBMISSIONS_DIR, jsonFiles[i]);
+    const pngPath = jsonPath.replace(/\.json$/, '.png');
+    try { fs.unlinkSync(jsonPath); } catch { /* ignore */ }
+    try { fs.unlinkSync(pngPath); } catch { /* ignore */ }
+  }
 }
 
 function verifyOrigin(origin) {
@@ -388,6 +405,12 @@ tryListen(opts.port)
       },
     });
     wss.on('connection', (socket) => {
+      // Notify displaced tab
+      if (activeSocket && activeSocket.readyState === 1) {
+        try {
+          activeSocket.send(JSON.stringify({ type: 'displaced', message: 'Another tab has connected' }));
+        } catch { /* ignore */ }
+      }
       activeSocket = socket;
       let wsMessageTimestamps = [];
       socket.on('close', () => {
@@ -423,6 +446,7 @@ tryListen(opts.port)
       } catch { /* ignore */ }
       fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url, projectDir }, null, 2), { mode: 0o600 });
     }
+    cleanupSubmissions(opts.maxSubmissions);
     if (opts.open) openBrowser(url);
   })
   .catch((err) => {

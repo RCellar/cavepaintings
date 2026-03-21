@@ -1,6 +1,8 @@
 /* global fabric */
 import { getCanvas, getCurrentTool } from './canvas-core.js';
 
+let touchStartPos = null;
+
 export function setupTouch() {
   const canvas = getCanvas();
   const el = canvas.upperCanvasEl;
@@ -15,6 +17,9 @@ export function setupTouch() {
       lastTouchDistance = getTouchDistance(e.touches);
       lastTouchCenter = getTouchCenter(e.touches);
     } else if (e.touches.length === 1) {
+      touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      // Suppress long-press context menu during polygon drawing
+      if (getCurrentTool() === 'polygon') return;
       longPressTimer = setTimeout(() => {
         showContextMenu(e.touches[0].clientX, e.touches[0].clientY);
         longPressTimer = null;
@@ -47,12 +52,33 @@ export function setupTouch() {
     lastTouchDistance = 0;
     lastTouchCenter = null;
     if (e.changedTouches.length === 1) {
+      const touch = e.changedTouches[0];
       const now = Date.now();
+
+      // Polygon tool: dispatch as canvas click for vertex placement
+      if (getCurrentTool() === 'polygon' && touchStartPos) {
+        const dx = touch.clientX - touchStartPos.x;
+        const dy = touch.clientY - touchStartPos.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 10) {
+          const canvasEl = canvas.upperCanvasEl;
+          canvasEl.dispatchEvent(new MouseEvent('mousedown', {
+            clientX: touch.clientX, clientY: touch.clientY, bubbles: true,
+          }));
+          canvasEl.dispatchEvent(new MouseEvent('mouseup', {
+            clientX: touch.clientX, clientY: touch.clientY, bubbles: true,
+          }));
+        }
+        touchStartPos = null;
+        return;
+      }
+
+      // Double-tap detection (existing)
       if (now - lastTapTime < 300) {
-        handleDoubleTap(e.changedTouches[0]);
+        handleDoubleTap(touch);
       }
       lastTapTime = now;
     }
+    touchStartPos = null;
   });
 }
 

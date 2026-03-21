@@ -55,6 +55,10 @@ export function setupObjectList() {
     visible = !visible;
     panel.classList.toggle('hidden', !visible);
     btn.classList.toggle('active', visible);
+    if (visible && window.innerWidth < 768) {
+      document.getElementById('properties-panel')?.classList.add('hidden');
+      document.getElementById('brush-panel')?.classList.add('hidden');
+    }
     if (visible) refresh();
   }
 
