@@ -2,6 +2,26 @@
 
 All notable changes to Cavepaintings are documented here.
 
+## [0.3.1] - 2026-03-20
+
+### Security
+- Removed `unsafe-inline` from CSP `script-src` — tightened to `script-src 'self'`
+
+### Added
+- **Version identifier** — version displayed in HTML meta tag and bottom bar label
+- **Submission retention** — configurable `--max-submissions` CLI option (default 50) with automatic cleanup of oldest submissions
+- **Displaced tab notification** — when a new browser tab connects, the old tab shows "Another tab connected" and stops auto-reconnecting
+- **Polygon touch support** — polygon tool now works on touch devices via single-tap vertex placement
+- **Test coverage** — added Playwright tests for undo/redo, grid toggle, and connector reroute on resize
+
+### Fixed
+- Connector index now clears when canvas is cleared, preventing stale references
+- Object list panel responsive on tablet — renders as bottom sheet with mutual exclusion
+- Bump script now updates version in `index.html` alongside JSON files
+
+### Changed
+- Extracted shared `showToast`/`hideToast` into `src/toast.js`, removed duplicates from `tools.js` and `image-utils.js`
+
 ## [0.3.0] - 2026-03-20
 
 ### Security
