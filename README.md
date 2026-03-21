@@ -1,5 +1,7 @@
 # Cavepaintings
 
+> **Experimental** -- This project is in active development and should be considered in public testing. APIs, features, and behavior may change between releases. Feedback and bug reports are welcome via [GitHub Issues](https://github.com/RCellar/cavepaintings/issues).
+
 A browser-based interactive drawing canvas that integrates with Claude Code. Draw diagrams, paste and annotate images, and submit canvas snapshots directly into your Claude Code conversation over a persistent WebSocket connection.
 
 ![Cavepaintings UI](mockup.svg)
