@@ -16,6 +16,8 @@ let isDrawingShape = false;
 let shapeOrigin = null;
 let activeShape = null;
 let clipboardObject = null;
+let polygonPoints = [];
+let polygonPreviewLines = [];
 
 // ---------------------------------------------------------------------------
 // Tool switching
@@ -106,6 +108,82 @@ function createArrow(x1, y1, x2, y2) {
 }
 
 // ---------------------------------------------------------------------------
+// Polygon helpers
+// ---------------------------------------------------------------------------
+function updatePolygonPreview() {
+  const canvas = getCanvas();
+  polygonPreviewLines.forEach(l => canvas.remove(l));
+  polygonPreviewLines = [];
+
+  for (let i = 0; i < polygonPoints.length - 1; i++) {
+    const line = new fabric.Line(
+      [polygonPoints[i].x, polygonPoints[i].y, polygonPoints[i + 1].x, polygonPoints[i + 1].y],
+      { stroke: '#4a9eff', strokeWidth: 2, strokeDashArray: [5, 5], selectable: false, evented: false }
+    );
+    polygonPreviewLines.push(line);
+    canvas.add(line);
+  }
+
+  if (polygonPoints.length >= 2) {
+    const last = polygonPoints[polygonPoints.length - 1];
+    const first = polygonPoints[0];
+    const closeLine = new fabric.Line(
+      [last.x, last.y, first.x, first.y],
+      { stroke: '#4a9eff', strokeWidth: 1, strokeDashArray: [3, 3], selectable: false, evented: false }
+    );
+    polygonPreviewLines.push(closeLine);
+    canvas.add(closeLine);
+  }
+  canvas.renderAll();
+}
+
+function finalizePolygon() {
+  const canvas = getCanvas();
+  polygonPreviewLines.forEach(l => canvas.remove(l));
+  polygonPreviewLines = [];
+
+  if (polygonPoints.length < 3) {
+    showToast('Polygon needs at least 3 vertices');
+    polygonPoints = [];
+    return;
+  }
+
+  const polygon = new fabric.Polygon(polygonPoints, {
+    fill: 'rgba(74,158,255,0.2)',
+    stroke: '#4a9eff',
+    strokeWidth: 2,
+    selectable: true,
+    evented: true,
+  });
+  canvas.add(polygon);
+  canvas.setActiveObject(polygon);
+  polygonPoints = [];
+  saveState();
+}
+
+export function cancelPolygon() {
+  const canvas = getCanvas();
+  polygonPreviewLines.forEach(l => canvas.remove(l));
+  polygonPreviewLines = [];
+  polygonPoints = [];
+  canvas.renderAll();
+}
+
+function showToast(message, duration = 3000) {
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'polite');
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add('visible');
+  setTimeout(() => toast.classList.remove('visible'), duration);
+}
+
+// ---------------------------------------------------------------------------
 // Canvas event handlers
 // ---------------------------------------------------------------------------
 export function setupCanvasEvents() {
@@ -128,6 +206,27 @@ export function setupCanvasEvents() {
     }
 
     if (currentTool === 'select' || currentTool === 'draw') return;
+
+    if (currentTool === 'polygon') {
+      // Check close conditions
+      if (polygonPoints.length >= 3) {
+        const first = polygonPoints[0];
+        const dist = Math.sqrt((pointer.x - first.x) ** 2 + (pointer.y - first.y) ** 2);
+        if (dist < 10) {
+          finalizePolygon();
+          return;
+        }
+      }
+      // Check double-click to close
+      if (opt.e.detail === 2 && polygonPoints.length >= 3) {
+        finalizePolygon();
+        return;
+      }
+
+      polygonPoints.push({ x: pointer.x, y: pointer.y });
+      updatePolygonPreview();
+      return;
+    }
 
     if (currentTool === 'text') {
       const text = new fabric.IText('Text', {
@@ -184,6 +283,12 @@ export function setupCanvasEvents() {
         { stroke: '#4a9eff', strokeWidth: 2, selectable: false, evented: false }
       );
       canvas.add(activeShape);
+    } else if (currentTool === 'line') {
+      activeShape = new fabric.Line(
+        [pointer.x, pointer.y, pointer.x, pointer.y],
+        { stroke: '#4a9eff', strokeWidth: 2, selectable: false, evented: false }
+      );
+      canvas.add(activeShape);
     }
   });
 
@@ -225,6 +330,8 @@ export function setupCanvasEvents() {
       });
     } else if (currentTool === 'arrow') {
       activeShape.set({ x2: pointer.x, y2: pointer.y });
+    } else if (currentTool === 'line') {
+      activeShape.set({ x2: pointer.x, y2: pointer.y });
     }
     canvas.requestRenderAll();
   });
@@ -241,6 +348,24 @@ export function setupCanvasEvents() {
 
     if (!isDrawingShape || !activeShape) return;
     isDrawingShape = false;
+
+    // Finalize line: simpler than arrow, no arrowhead conversion needed
+    // Must be BEFORE the arrow block — both use Line objects
+    if (currentTool === 'line') {
+      const line = activeShape;
+      if (line.x1 === line.x2 && line.y1 === line.y2) {
+        canvas.remove(line);
+        activeShape = null;
+        shapeOrigin = null;
+        return;
+      }
+      line.set({ selectable: true, evented: true });
+      canvas.setActiveObject(line);
+      activeShape = null;
+      shapeOrigin = null;
+      saveState();
+      return;
+    }
 
     // Finalize arrow: replace temp line with grouped arrow+arrowhead
     // Must be BEFORE the zero-size check — Line has no .width/.height
@@ -430,8 +555,9 @@ export function setupKeyboard() {
       }
     }
 
-    const toolMap = { v: 'select', r: 'rect', e: 'ellipse', a: 'arrow', d: 'draw', t: 'text', i: 'image' };
+    const toolMap = { v: 'select', r: 'rect', e: 'ellipse', a: 'arrow', l: 'line', p: 'polygon', d: 'draw', t: 'text', i: 'image' };
     if (key === 'g') { toggleGrid(); return; }
+    if (key === 'escape') { cancelPolygon(); return; }
     if (toolMap[key]) { setTool(toolMap[key]); return; }
 
     if (key === 'delete' || key === 'backspace') {

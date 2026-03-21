@@ -466,6 +466,56 @@ test.describe('Arrow tool performance', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Line Tool
+// ---------------------------------------------------------------------------
+test.describe('Line Tool', () => {
+  test('L key switches to line tool', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'l');
+    const btn = page.locator('.tool-btn[data-tool="line"]');
+    await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('draws a line on drag', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'l');
+    const canvasEl = page.locator('.upper-canvas');
+    const box = await canvasEl.boundingBox();
+    await page.mouse.move(box.x + 100, box.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 300, box.y + 200, { steps: 5 });
+    await page.mouse.up();
+    await page.press('body', 'v');
+    const count = await page.evaluate(() => canvas.getObjects().length);
+    expect(count).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Polygon Tool
+// ---------------------------------------------------------------------------
+test.describe('Polygon Tool', () => {
+  test('P key switches to polygon tool', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'p');
+    const btn = page.locator('.tool-btn[data-tool="polygon"]');
+    await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('Escape cancels polygon drawing', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'p');
+    const canvasEl = page.locator('.upper-canvas');
+    const box = await canvasEl.boundingBox();
+    await page.mouse.click(box.x + 100, box.y + 100);
+    await page.mouse.click(box.x + 200, box.y + 100);
+    await page.press('body', 'Escape');
+    const count = await page.evaluate(() => canvas.getObjects().length);
+    expect(count).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Responsive Layout
 // ---------------------------------------------------------------------------
 test.describe('Responsive Layout', () => {
