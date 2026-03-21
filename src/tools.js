@@ -12,6 +12,7 @@ import { showToast } from './toast.js';
 import {
   activateConnectorTool, deactivateConnectorTool,
   connectorMouseDown, connectorMouseMove, connectorCancel,
+  clearConnectorIndex,
   reconnectConnectors,
 } from './connectors.js';
 
@@ -470,6 +471,7 @@ export function setupToolbar() {
   document.getElementById('btn-clear').addEventListener('click', () => {
     if (confirm('Clear the canvas? This cannot be undone.')) {
       canvas.clear();
+      clearConnectorIndex();
       canvas.backgroundColor = getGridVisible() ? getGridPattern() : themes[getCurrentTheme()].canvasBg;
       canvas.renderAll();
       clearUndoStacks();
