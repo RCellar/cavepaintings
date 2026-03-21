@@ -1,0 +1,397 @@
+openapi: 3.1.0
+info:
+  title: Cavepaintings API
+  description: |
+    REST API and WebSocket protocol for the Cavepaintings browser-based drawing canvas.
+    All endpoints are localhost-only and require no authentication.
+  version: 0.3.3
+  license:
+    name: MIT
+    url: https://github.com/RCellar/cavepaintings/blob/master/LICENSE
+  contact:
+    name: RCellar
+    url: https://github.com/RCellar/cavepaintings
+
+servers:
+  - url: http://localhost:9731
+    description: Default local server (port auto-increments if in use)
+
+tags:
+  - name: Canvas
+    description: Push objects to the browser canvas
+  - name: Submissions
+    description: Poll for canvas submissions
+  - name: Info
+    description: Server metadata
+
+paths:
+  /api/info:
+    get:
+      tags: [Info]
+      summary: Get project directory name
+      description: Returns the project directory name used for the browser tab title and export filenames.
+      operationId: getInfo
+      responses:
+        "200":
+          description: Project info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projectDir:
+                    type: string
+                    description: Project directory name from CAVEPAINTINGS_PROJECT_DIR env var
+                    example: my-project
+              example:
+                projectDir: my-project
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/submissions:
+    get:
+      tags: [Submissions]
+      summary: Poll for canvas submissions
+      description: |
+        Returns all submissions with timestamps newer than the `since` parameter.
+        Each submission includes file paths to the PNG screenshot and Fabric.js JSON.
+        The server retains the most recent N submissions (default 50, configurable via `--max-submissions`).
+      operationId: getSubmissions
+      parameters:
+        - name: since
+          in: query
+          required: false
+          description: Unix timestamp in milliseconds. Only submissions newer than this value are returned.
+          schema:
+            type: integer
+            default: 0
+            example: 1774030611729
+      responses:
+        "200":
+          description: List of submissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  submissions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Submission"
+              example:
+                submissions:
+                  - id: submission-1774030611729
+                    timestamp: 1774030611729
+                    prompt: review this architecture
+                    png: /tmp/cavepaintings/submissions/submission-1774030611729.png
+                    json: /tmp/cavepaintings/submissions/submission-1774030611729.json
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /api/canvas:
+    post:
+      tags: [Canvas]
+      summary: Push objects to the canvas
+      description: |
+        Forwards Fabric.js objects to the connected browser canvas via WebSocket.
+        Objects appear in real time. Use `merge` mode to add objects to the existing
+        canvas or `replace` mode to clear and load a new diagram.
+
+        Requires a browser tab with the canvas open (WebSocket connected).
+      operationId: pushCanvas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CanvasPushRequest"
+            examples:
+              merge:
+                summary: Add a rectangle to the canvas
+                value:
+                  diagram:
+                    objects:
+                      - type: rect
+                        left: 50
+                        top: 50
+                        width: 200
+                        height: 100
+                        fill: "#4a9eff"
+                        stroke: "#fff"
+                        strokeWidth: 2
+                  mode: merge
+              replace:
+                summary: Clear canvas and load text
+                value:
+                  diagram:
+                    objects:
+                      - type: i-text
+                        left: 100
+                        top: 100
+                        text: Fresh start
+                        fill: "#fff"
+                        fontSize: 24
+                  mode: replace
+              multi:
+                summary: Multiple objects at once
+                value:
+                  diagram:
+                    objects:
+                      - type: rect
+                        left: 50
+                        top: 50
+                        width: 200
+                        height: 100
+                        fill: "#4a9eff"
+                      - type: i-text
+                        left: 70
+                        top: 80
+                        text: Hello from the API
+                        fill: "#fff"
+                        fontSize: 16
+                      - type: ellipse
+                        left: 300
+                        top: 50
+                        rx: 60
+                        ry: 40
+                        fill: rgba(255,0,0,0.3)
+                        stroke: "#ff0000"
+                  mode: merge
+      responses:
+        "200":
+          description: Objects forwarded to browser
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+              example:
+                ok: true
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingDiagram:
+                  summary: Missing diagram field
+                  value:
+                    error: diagram must be an object
+                invalidMode:
+                  summary: Invalid mode
+                  value:
+                    error: 'mode must be "merge" or "replace"'
+                missingType:
+                  summary: Object missing type field
+                  value:
+                    error: objects[0] must have a string "type" field
+                unknownKeys:
+                  summary: Unknown top-level keys
+                  value:
+                    error: "Unknown keys: extra, foo"
+        "413":
+          description: Payload too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: Payload too large (max 5 MB)
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: No browser client connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: No browser client connected
+
+components:
+  schemas:
+    Submission:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique submission identifier
+          example: submission-1774030611729
+        timestamp:
+          type: integer
+          description: Unix timestamp in milliseconds
+          example: 1774030611729
+        prompt:
+          type: string
+          description: Optional message from the prompt input field
+          example: review this architecture
+        png:
+          type: string
+          nullable: true
+          description: Absolute file path to 2x HiDPI PNG screenshot
+          example: /tmp/cavepaintings/submissions/submission-1774030611729.png
+        json:
+          type: string
+          description: Absolute file path to Fabric.js JSON file
+          example: /tmp/cavepaintings/submissions/submission-1774030611729.json
+      required: [id, timestamp, prompt, json]
+
+    CanvasPushRequest:
+      type: object
+      properties:
+        diagram:
+          type: object
+          description: Fabric.js diagram definition
+          properties:
+            objects:
+              type: array
+              description: Array of Fabric.js object definitions
+              items:
+                $ref: "#/components/schemas/FabricObject"
+          required: [objects]
+        mode:
+          type: string
+          enum: [merge, replace]
+          description: |
+            `merge` adds objects to the existing canvas.
+            `replace` clears the canvas and loads only these objects.
+      required: [diagram, mode]
+      additionalProperties: false
+
+    FabricObject:
+      type: object
+      description: |
+        A Fabric.js object definition. Must include a `type` field.
+        All other properties follow the Fabric.js serialization format.
+      properties:
+        type:
+          type: string
+          description: Fabric.js object type
+          enum: [rect, ellipse, line, polygon, i-text, path, group, image]
+          example: rect
+        left:
+          type: number
+          description: X position
+          example: 50
+        top:
+          type: number
+          description: Y position
+          example: 50
+        width:
+          type: number
+          description: Width (rect, image)
+          example: 200
+        height:
+          type: number
+          description: Height (rect, image)
+          example: 100
+        rx:
+          type: number
+          description: Horizontal radius (ellipse)
+        ry:
+          type: number
+          description: Vertical radius (ellipse)
+        fill:
+          type: string
+          description: Fill color (CSS color string)
+          example: "#4a9eff"
+        stroke:
+          type: string
+          description: Stroke color (CSS color string)
+          example: "#ffffff"
+        strokeWidth:
+          type: number
+          description: Stroke width in pixels
+          example: 2
+        text:
+          type: string
+          description: Text content (i-text)
+          example: Hello
+        fontSize:
+          type: integer
+          description: Font size in pixels (i-text)
+          example: 16
+        fontFamily:
+          type: string
+          description: Font family (i-text)
+          example: "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+        points:
+          type: array
+          description: Vertex points (polygon)
+          items:
+            type: object
+            properties:
+              x:
+                type: number
+              y:
+                type: number
+        x1:
+          type: number
+          description: Start X (line)
+        y1:
+          type: number
+          description: Start Y (line)
+        x2:
+          type: number
+          description: End X (line)
+        y2:
+          type: number
+          description: End Y (line)
+        opacity:
+          type: number
+          description: Opacity (0-1)
+          minimum: 0
+          maximum: 1
+          default: 1
+        angle:
+          type: number
+          description: Rotation angle in degrees
+          default: 0
+        scaleX:
+          type: number
+          description: Horizontal scale factor
+          default: 1
+        scaleY:
+          type: number
+          description: Vertical scale factor
+          default: 1
+      required: [type]
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+      required: [error]
+
+    RateLimitError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Too many requests
+        retryAfter:
+          type: integer
+          description: Seconds until the rate limit window resets
+          example: 42
+
+  responses:
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: string
+          description: Seconds until the rate limit window resets
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RateLimitError"
+          example:
+            error: Too many requests
+            retryAfter: 42
