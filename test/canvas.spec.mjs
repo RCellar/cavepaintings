@@ -706,6 +706,75 @@ test.describe('Connector System', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Properties Discoverability
+// ---------------------------------------------------------------------------
+test.describe('Properties Discoverability', () => {
+  test('shows empty state when nothing selected', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    const emptyState = page.locator('#props-empty-state');
+    await expect(emptyState).toBeVisible();
+    await expect(emptyState).toContainText('Select an object');
+  });
+
+  test('properties panel is visible by default', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    const panel = page.locator('#properties-panel');
+    await expect(panel).toBeVisible();
+  });
+
+  test('Q key toggles properties panel', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    const panel = page.locator('#properties-panel');
+    await expect(panel).toBeVisible();
+    await page.press('body', 'q');
+    await expect(panel).not.toBeVisible();
+    await page.press('body', 'q');
+    await expect(panel).toBeVisible();
+  });
+
+  test('properties content shown when object selected', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+
+    await page.evaluate(() => {
+      const rect = new fabric.Rect({ left: 100, top: 100, width: 100, height: 100, fill: '#4a9eff' });
+      canvas.add(rect);
+      canvas.setActiveObject(rect);
+      canvas.renderAll();
+      canvas.fire('selection:created', { selected: [rect] });
+    });
+
+    await expect(page.locator('#props-content')).toBeVisible();
+    await expect(page.locator('#props-empty-state')).not.toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Image URL Panel
+// ---------------------------------------------------------------------------
+test.describe('Image URL', () => {
+  test('image URL input visible when image tool active', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.press('body', 'i');
+    const urlPanel = page.locator('#image-url-panel');
+    await expect(urlPanel).toBeVisible();
+  });
+
+  test('image URL panel hides when switching away from image tool', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.press('body', 'i');
+    await expect(page.locator('#image-url-panel')).toBeVisible();
+    await page.press('body', 'v');
+    await expect(page.locator('#image-url-panel')).not.toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Object List Panel
 // ---------------------------------------------------------------------------
 test.describe('Object List Panel', () => {

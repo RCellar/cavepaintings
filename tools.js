@@ -70,10 +70,12 @@ export function setTool(tool) {
   const brushPanel = document.getElementById('brush-panel');
   if (brushPanel) {
     brushPanel.classList.toggle('hidden', tool !== 'draw');
-    // Bottom sheet mutual exclusion on tablet
-    if (tool === 'draw' && window.innerWidth < 768) {
-      document.getElementById('properties-panel')?.classList.add('hidden');
-    }
+  }
+
+  // Show/hide image URL panel
+  const imageUrlPanel = document.getElementById('image-url-panel');
+  if (imageUrlPanel) {
+    imageUrlPanel.classList.toggle('hidden', tool !== 'image');
   }
 
   document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
@@ -457,9 +459,7 @@ export function setupCanvasEvents() {
   // Selection events
   canvas.on('selection:created', updatePropertiesPanel);
   canvas.on('selection:updated', updatePropertiesPanel);
-  canvas.on('selection:cleared', () => {
-    document.getElementById('properties-panel').classList.add('hidden');
-  });
+  canvas.on('selection:cleared', updatePropertiesPanel);
 
   canvas.on('object:modified', saveState);
   canvas.on('path:created', saveState);
@@ -583,6 +583,7 @@ export function setupKeyboard() {
     }
 
     const toolMap = { v: 'select', r: 'rect', e: 'ellipse', a: 'arrow', l: 'line', p: 'polygon', d: 'draw', t: 'text', i: 'image', c: 'connector' };
+    if (key === 'q') { document.getElementById('btn-properties')?.click(); return; }
     if (key === 'o') { document.getElementById('btn-object-list')?.click(); return; }
     if (key === 'g') { toggleGrid(); return; }
     if (key === 'escape') { cancelPolygon(); connectorCancel(); return; }

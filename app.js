@@ -1,8 +1,8 @@
 import { initCanvas, getCanvas, setupAutoSave, restoreFromLocalStorage, restoreTheme, handleResize, setupZoomIndicator, saveState, setupViewport } from './canvas-core.js';
 import { setupCanvasEvents, setupToolbar, setupKeyboard } from './tools.js';
-import { setupProperties, setupBrushPanel } from './properties.js';
+import { setupProperties, setupBrushPanel, togglePropertiesPanel, setupPropertiesHint } from './properties.js';
 import { connectWebSocket, submitToClaude } from './websocket-client.js';
-import { setupDragDrop, setupImagePaste } from './image-utils.js';
+import { setupDragDrop, setupImagePaste, setupImageUrlInput } from './image-utils.js';
 import { setupTouch } from './touch.js';
 import { setupObjectList } from './object-list.js';
 
@@ -25,6 +25,9 @@ document.addEventListener('DOMContentLoaded', function () {
   setupAutoSave();
   setupDragDrop();
   setupImagePaste();
+  setupImageUrlInput();
+  setupPropertiesHint();
+  document.getElementById('btn-properties')?.addEventListener('click', togglePropertiesPanel);
   restoreFromLocalStorage();
   restoreTheme();
   connectWebSocket();
