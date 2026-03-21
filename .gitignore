@@ -1,5 +1,6 @@
 node_modules/
 .superpowers/
 docs/
+test/
 .happytrails/
 test-results/
