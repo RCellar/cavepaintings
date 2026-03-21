@@ -2,10 +2,12 @@
 test/
 scripts/
 docs/
-playwright.config.mjs
-mockup.svg
+.claude/
 .happytrails/
 .superpowers/
 test-results/
+playwright.config.mjs
+mockup.svg
+CHANGELOG.md
 .gitattributes
 .npmignore
