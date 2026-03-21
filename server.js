@@ -453,7 +453,8 @@ tryListen(opts.port)
     cleanupSubmissions(opts.maxSubmissions);
 
     // Watch owner process — shut down if it exits
-    if (opts.ownerPid) {
+    // Skipped on Windows: process.kill(pid, 0) is unreliable on win32
+    if (opts.ownerPid && process.platform !== 'win32') {
       setInterval(() => {
         try {
           process.kill(opts.ownerPid, 0);

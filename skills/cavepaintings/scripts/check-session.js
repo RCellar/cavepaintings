@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { execSync } from 'node:child_process';
 
 const stateFile = path.join(os.tmpdir(), 'cavepaintings', 'state.json');
 const submissionsDir = path.join(os.tmpdir(), 'cavepaintings', 'submissions');
@@ -39,10 +40,18 @@ if (mode === 'submissions') {
     process.exit(0);
   }
   const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-  try {
-    process.kill(state.pid, 0);
+  let alive = false;
+  if (process.platform === 'win32') {
+    try {
+      const out = execSync(`tasklist /FI "PID eq ${state.pid}" /NH`, { encoding: 'utf8', timeout: 5000 });
+      alive = out.includes(String(state.pid));
+    } catch { /* not alive */ }
+  } else {
+    try { process.kill(state.pid, 0); alive = true; } catch { /* not alive */ }
+  }
+  if (alive) {
     console.log('RUNNING:' + JSON.stringify(state));
-  } catch {
+  } else {
     fs.unlinkSync(stateFile);
     console.log('STALE');
   }

@@ -21,6 +21,8 @@ case "${OSTYPE:-}" in
   msys*|cygwin*|mingw*) FOREGROUND="true" ;;
 esac
 if [[ -n "${MSYSTEM:-}" ]]; then FOREGROUND="true"; fi
+# Fallback: detect Windows via OS env var (always set on Windows, never on Linux/macOS)
+if [[ "${OS:-}" == "Windows_NT" ]]; then FOREGROUND="true"; fi
 
 # Install dependencies if needed
 if [[ ! -d "$PROJECT_ROOT/node_modules" ]]; then
@@ -42,11 +44,18 @@ fi
 # Check for existing running session — reuse if alive
 STATE_FILE="$(node -e "const os=require('os'),p=require('path');console.log(p.join(os.tmpdir(),'cavepaintings','state.json'))")"
 if [[ -f "$STATE_FILE" ]]; then
-  OLD_PID="$(node -e "console.log(JSON.parse(require('fs').readFileSync('$STATE_FILE','utf8')).pid)")"
-  if kill -0 "$OLD_PID" 2>/dev/null; then
+  OLD_PID="$(STATE_FILE_PATH="$STATE_FILE" node -e "console.log(JSON.parse(require('fs').readFileSync(process.env.STATE_FILE_PATH,'utf8')).pid)")"
+  # Cross-platform PID liveness check
+  _alive=false
+  if [[ "${OS:-}" == "Windows_NT" ]] && ! grep -qi microsoft /proc/version 2>/dev/null; then
+    tasklist //FI "PID eq $OLD_PID" 2>/dev/null | grep -qw "$OLD_PID" && _alive=true
+  else
+    kill -0 "$OLD_PID" 2>/dev/null && _alive=true
+  fi
+  if [[ "$_alive" == "true" ]]; then
     # Server is already running — return existing session info
-    node -e "
-      const state = JSON.parse(require('fs').readFileSync('$STATE_FILE','utf8'));
+    STATE_FILE_PATH="$STATE_FILE" node -e "
+      const state = JSON.parse(require('fs').readFileSync(process.env.STATE_FILE_PATH,'utf8'));
       state.status = 'existing';
       console.log(JSON.stringify(state));
     "
@@ -63,7 +72,35 @@ SERVER_LOG="$STATE_DIR/server.log"
 
 # Start server
 if [[ "$FOREGROUND" == "true" ]]; then
-  CAVEPAINTINGS_PROJECT_DIR="${CAVEPAINTINGS_PROJECT_DIR:-}" node "$PROJECT_ROOT/server.js" --no-open --owner-pid "$PPID"
+  # Foreground mode: background the node process minimally (no nohup/disown)
+  # so it remains a child of this script. This keeps Codex from reaping it
+  # and avoids nohup issues on Windows (MSYS/Cygwin).
+  CAVEPAINTINGS_PROJECT_DIR="${CAVEPAINTINGS_PROJECT_DIR:-}" node "$PROJECT_ROOT/server.js" --no-open --owner-pid "$PPID" > "$SERVER_LOG" 2>&1 &
+  SERVER_PID=$!
+
+  # Poll for state file (same as background path)
+  for i in $(seq 1 20); do
+    if [[ -f "$STATE_FILE" ]]; then
+      if kill -0 "$SERVER_PID" 2>/dev/null; then
+        cat "$STATE_FILE"
+        # Keep script alive so node stays a child process (not orphaned).
+        # The caller has already consumed stdout JSON above.
+        wait "$SERVER_PID" 2>/dev/null
+        exit $?
+      else
+        echo "{\"error\": \"Server started but crashed immediately. Check $SERVER_LOG\"}"
+        exit 1
+      fi
+    fi
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+      echo "{\"error\": \"Server process exited before starting. Check $SERVER_LOG\"}"
+      exit 1
+    fi
+    sleep 0.25
+  done
+
+  echo "{\"error\": \"Server did not start within 5 seconds. Check $SERVER_LOG\"}"
+  exit 1
 else
   CAVEPAINTINGS_PROJECT_DIR="${CAVEPAINTINGS_PROJECT_DIR:-}" nohup node "$PROJECT_ROOT/server.js" --no-open --owner-pid "$PPID" > "$SERVER_LOG" 2>&1 &
   SERVER_PID=$!
