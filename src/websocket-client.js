@@ -14,11 +14,13 @@ let ws = null;
 let wsReconnectDelay = 1000;
 let wsReconnectTimer = null;
 let pendingSubmitTimer = null;
+let displaced = false;
 
 // ---------------------------------------------------------------------------
 // WebSocket – connect with exponential back-off
 // ---------------------------------------------------------------------------
 export function connectWebSocket() {
+  displaced = false;
   const canvas = getCanvas();
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const url = `${protocol}//${location.host}`;
@@ -38,7 +40,7 @@ export function connectWebSocket() {
 
   ws.addEventListener('close', () => {
     setConnectionStatus(false);
-    scheduleReconnect();
+    if (!displaced) scheduleReconnect();
   });
 
   ws.addEventListener('error', () => {
@@ -48,6 +50,15 @@ export function connectWebSocket() {
   ws.addEventListener('message', (event) => {
     try {
       const msg = JSON.parse(event.data);
+      if (msg.type === 'displaced') {
+        displaced = true;
+        setConnectionStatus(false);
+        const text = document.getElementById('status-text');
+        if (text) text.textContent = 'Another tab connected';
+        ws.close();
+        if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+        return;
+      }
       if (msg.type === 'ack') {
         if (pendingSubmitTimer) {
           clearTimeout(pendingSubmitTimer);

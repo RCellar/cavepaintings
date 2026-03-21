@@ -405,6 +405,12 @@ tryListen(opts.port)
       },
     });
     wss.on('connection', (socket) => {
+      // Notify displaced tab
+      if (activeSocket && activeSocket.readyState === 1) {
+        try {
+          activeSocket.send(JSON.stringify({ type: 'displaced', message: 'Another tab has connected' }));
+        } catch { /* ignore */ }
+      }
       activeSocket = socket;
       let wsMessageTimestamps = [];
       socket.on('close', () => {
