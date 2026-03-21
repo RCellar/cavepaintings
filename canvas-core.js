@@ -64,6 +64,26 @@ export function initCanvas() {
   });
 
   window.__canvas = canvas;
+
+  // Patch FabricObject.toObject so caveId/caveName are always included in
+  // serialisation. Fabric 6.x's canvas.toJSON() does not forward its
+  // propertiesToInclude argument to each object, so we inject the custom
+  // properties at the prototype level instead.
+  const _origToObject = fabric.FabricObject.prototype.toObject;
+  const _caveProps = ['caveId', 'caveName'];
+  fabric.FabricObject.prototype.toObject = function (additionalProps) {
+    const base = _origToObject.call(this, additionalProps);
+    _caveProps.forEach((prop) => {
+      if (this[prop] !== undefined) base[prop] = this[prop];
+    });
+    return base;
+  };
+
+  canvas.on('object:added', (e) => {
+    if (!e.target.caveId) {
+      e.target.caveId = crypto.randomUUID();
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -97,7 +117,7 @@ export function setupViewport() {
 export function saveState() {
   if (isLoadingState) return;
   try {
-    const json = JSON.stringify(canvas.toJSON());
+    const json = JSON.stringify(canvas.toJSON(['caveId', 'caveName']));
     undoStack.push(json);
     if (undoStack.length > 50) undoStack.shift();
     redoStack = [];
@@ -215,7 +235,7 @@ export function setupAutoSave() {
 
 export function persistCanvas(json) {
   try {
-    if (!json) json = JSON.stringify(canvas.toJSON());
+    if (!json) json = JSON.stringify(canvas.toJSON(['caveId', 'caveName']));
     localStorage.setItem('cavepaintings-canvas', json);
   } catch { /* quota exceeded — silently ignore */ }
   canvasDirty = false;

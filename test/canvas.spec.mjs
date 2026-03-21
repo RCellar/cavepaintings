@@ -516,6 +516,47 @@ test.describe('Polygon Tool', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Object ID System
+// ---------------------------------------------------------------------------
+test.describe('Object ID System', () => {
+  test('new objects get a caveId assigned', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'r');
+    const canvasEl = page.locator('.upper-canvas');
+    const box = await canvasEl.boundingBox();
+    await page.mouse.move(box.x + 100, box.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 200, box.y + 200, { steps: 5 });
+    await page.mouse.up();
+    const hasId = await page.evaluate(() => {
+      const obj = canvas.getObjects()[0];
+      return typeof obj.caveId === 'string' && obj.caveId.length > 0;
+    });
+    expect(hasId).toBe(true);
+  });
+
+  test('caveId persists through JSON round-trip', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'r');
+    const canvasEl = page.locator('.upper-canvas');
+    const box = await canvasEl.boundingBox();
+    await page.mouse.move(box.x + 100, box.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 200, box.y + 200, { steps: 5 });
+    await page.mouse.up();
+
+    const result = await page.evaluate(() => {
+      const obj = canvas.getObjects()[0];
+      const originalId = obj.caveId;
+      const json = canvas.toJSON(['caveId', 'caveName']);
+      return { originalId, jsonHasId: !!json.objects[0].caveId, jsonId: json.objects[0].caveId };
+    });
+    expect(result.jsonHasId).toBe(true);
+    expect(result.jsonId).toBe(result.originalId);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Responsive Layout
 // ---------------------------------------------------------------------------
 test.describe('Responsive Layout', () => {
