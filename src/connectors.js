@@ -482,11 +482,17 @@ export function activateConnectorTool() {
   connectorToolState.sourceId = null;
   connectorToolState.sourceAnchor = null;
 
-  // Allow clicking on objects (we need target finding for anchor snapping)
-  canvas.skipTargetFind = false;
+  // Prevent Fabric.js from selecting/dragging objects — we handle anchor
+  // hit-testing ourselves from raw pointer coordinates
+  canvas.skipTargetFind = true;
   canvas.selection = false;
   canvas.defaultCursor = 'crosshair';
   canvas.hoverCursor = 'crosshair';
+
+  // Remove any existing handler before adding a new one (prevents duplication)
+  if (connectorToolState.afterRenderHandler) {
+    canvas.off('after:render', connectorToolState.afterRenderHandler);
+  }
 
   // Draw anchor overlay after each render
   connectorToolState.afterRenderHandler = () => {
@@ -513,6 +519,9 @@ export function deactivateConnectorTool() {
 
   connectorToolState.sourceId = null;
   connectorToolState.sourceAnchor = null;
+
+  // Force clear the overlay canvas to remove lingering anchor dots
+  canvas.clearContext(canvas.getTopContext());
   canvas.requestRenderAll();
 }
 
