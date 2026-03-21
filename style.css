@@ -264,6 +264,19 @@ body[data-theme="light"] #zoom-level:hover {
   color: #1a1a2e;
 }
 
+#version-label {
+  font-family: monospace;
+  font-size: 11px;
+  color: #606080;
+  user-select: none;
+  white-space: nowrap;
+}
+
+[data-theme="light"] #version-label,
+body[data-theme="light"] #version-label {
+  color: #909098;
+}
+
 #prompt-input {
   flex: 1;
   height: 32px;
