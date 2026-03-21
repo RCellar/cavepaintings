@@ -82,11 +82,15 @@ function checkRateLimit(req, res) {
 }
 
 function parseArgs(args) {
-  const opts = { port: 9731, open: true, maxSubmissions: 50 };
+  const opts = { port: 9731, open: true, maxSubmissions: 50, ownerPid: null };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--port' && args[i + 1]) opts.port = parseInt(args[i + 1], 10);
     if (args[i] === '--no-open') opts.open = false;
     if (args[i] === '--max-submissions' && args[i + 1]) opts.maxSubmissions = parseInt(args[i + 1], 10);
+    if (args[i] === '--owner-pid' && args[i + 1]) {
+      const pid = parseInt(args[i + 1], 10);
+      if (pid > 0) opts.ownerPid = pid;
+    }
   }
   return opts;
 }
@@ -447,6 +451,22 @@ tryListen(opts.port)
       fs.writeFileSync(STATE_FILE, JSON.stringify({ port, pid: process.pid, url, projectDir }, null, 2), { mode: 0o600 });
     }
     cleanupSubmissions(opts.maxSubmissions);
+
+    // Watch owner process — shut down if it exits
+    if (opts.ownerPid) {
+      setInterval(() => {
+        try {
+          process.kill(opts.ownerPid, 0);
+        } catch (err) {
+          if (err.code === 'ESRCH') {
+            console.log(`Owner process ${opts.ownerPid} exited, shutting down`);
+            shutdown();
+          }
+          // EPERM = process exists but different user — treat as alive
+        }
+      }, 15000).unref();
+    }
+
     if (opts.open) openBrowser(url);
   })
   .catch((err) => {
