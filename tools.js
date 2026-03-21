@@ -52,6 +52,10 @@ export function setTool(tool) {
   const brushPanel = document.getElementById('brush-panel');
   if (brushPanel) {
     brushPanel.classList.toggle('hidden', tool !== 'draw');
+    // Bottom sheet mutual exclusion on tablet
+    if (tool === 'draw' && window.innerWidth < 768) {
+      document.getElementById('properties-panel')?.classList.add('hidden');
+    }
   }
 
   document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {

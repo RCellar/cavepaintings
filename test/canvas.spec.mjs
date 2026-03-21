@@ -464,3 +464,26 @@ test.describe('Arrow tool performance', () => {
     expect(result.isGroup).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Responsive Layout
+// ---------------------------------------------------------------------------
+test.describe('Responsive Layout', () => {
+  test('toolbar moves to top on tablet viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 700, height: 1024 });
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForSelector('#toolbar');
+    const toolbar = page.locator('#toolbar');
+    const box = await toolbar.boundingBox();
+    expect(box.width).toBeGreaterThan(box.height);
+  });
+
+  test('toolbar is vertical sidebar on desktop', async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForSelector('#toolbar');
+    const toolbar = page.locator('#toolbar');
+    const box = await toolbar.boundingBox();
+    expect(box.height).toBeGreaterThan(box.width);
+  });
+});

@@ -14,6 +14,10 @@ export function updatePropertiesPanel() {
   const obj = canvas.getActiveObject();
   if (!obj) { panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
+  // Bottom sheet mutual exclusion on tablet
+  if (window.innerWidth < 768) {
+    document.getElementById('brush-panel')?.classList.add('hidden');
+  }
 
   const fill = obj.fill && typeof obj.fill === 'string' ? obj.fill : '#4a9eff';
   const stroke = obj.stroke || '#4a9eff';
