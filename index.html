@@ -24,6 +24,12 @@
         <button class="tool-btn" data-tool="arrow" title="Arrow (A)" aria-label="Arrow (A)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="14 5 19 5 19 10"/></svg>
         </button>
+        <button class="tool-btn" data-tool="line" title="Line (L)" aria-label="Line (L)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="polygon" title="Polygon (P)" aria-label="Polygon (P)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 18 20 6 20 2 8.5"/></svg>
+        </button>
         <button class="tool-btn" data-tool="draw" title="Freehand (D)" aria-label="Freehand (D)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17c3-3 6 2 9-1s3-6 6-4"/></svg>
         </button>
@@ -32,6 +38,9 @@
         </button>
         <button class="tool-btn" data-tool="image" title="Image (I)" aria-label="Image (I)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="connector" title="Connector (C)" aria-label="Connector (C)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><path d="M7 5h4a4 4 0 0 1 4 4v6"/></svg>
         </button>
       </div>
       <div class="tool-separator"></div>
@@ -44,6 +53,12 @@
         </button>
         <button class="tool-btn" id="btn-grid" title="Toggle Grid (G)" aria-label="Toggle Grid (G)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        </button>
+        <button class="tool-btn" id="btn-properties" title="Properties (Q)" aria-label="Properties (Q)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+        <button class="tool-btn" id="btn-object-list" title="Object List (O)" aria-label="Object List (O)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         </button>
         <button class="tool-btn" id="btn-theme" title="Toggle Theme" aria-label="Toggle Theme">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -68,34 +83,46 @@
     <div id="canvas-container">
       <canvas id="drawing-canvas"></canvas>
     </div>
-    <!-- Properties Panel (hidden by default) -->
-    <div id="properties-panel" class="hidden">
+    <!-- Properties Panel (always visible, shows empty state when nothing selected) -->
+    <div id="properties-panel">
       <div class="panel-title">Properties</div>
-      <div class="prop-row">
-        <label for="prop-fill">Fill</label>
-        <input type="color" id="prop-fill" value="#4a9eff">
+      <div id="props-empty-state" class="empty-state">Select an object to edit properties</div>
+      <div id="props-content" style="display:none">
+        <div class="prop-row">
+          <label for="prop-fill">Fill</label>
+          <input type="color" id="prop-fill" value="#4a9eff">
+        </div>
+        <div class="prop-row">
+          <label for="prop-stroke">Stroke</label>
+          <input type="color" id="prop-stroke" value="#4a9eff">
+        </div>
+        <div class="prop-row">
+          <label for="prop-stroke-width">Stroke Width</label>
+          <input type="range" id="prop-stroke-width" min="1" max="20" value="2">
+        </div>
+        <div class="prop-row">
+          <label for="prop-font-size">Font Size</label>
+          <input type="range" id="prop-font-size" min="8" max="72" value="16">
+        </div>
+        <div class="prop-row">
+          <label for="prop-opacity">Opacity</label>
+          <input type="range" id="prop-opacity" min="0" max="100" value="100">
+        </div>
+        <div class="prop-actions">
+          <button id="prop-delete" title="Delete">Del</button>
+          <button id="prop-duplicate" title="Duplicate">Dup</button>
+          <button id="prop-forward" title="Bring Forward">↑</button>
+          <button id="prop-backward" title="Send Backward">↓</button>
+        </div>
       </div>
+      <div id="props-hint" class="props-hint">← Edit properties here</div>
+    </div>
+    <!-- Image URL Panel (visible when image tool is active) -->
+    <div id="image-url-panel" class="hidden">
+      <div class="panel-title">Image</div>
       <div class="prop-row">
-        <label for="prop-stroke">Stroke</label>
-        <input type="color" id="prop-stroke" value="#4a9eff">
-      </div>
-      <div class="prop-row">
-        <label for="prop-stroke-width">Stroke Width</label>
-        <input type="range" id="prop-stroke-width" min="1" max="20" value="2">
-      </div>
-      <div class="prop-row">
-        <label for="prop-font-size">Font Size</label>
-        <input type="range" id="prop-font-size" min="8" max="72" value="16">
-      </div>
-      <div class="prop-row">
-        <label for="prop-opacity">Opacity</label>
-        <input type="range" id="prop-opacity" min="0" max="100" value="100">
-      </div>
-      <div class="prop-actions">
-        <button id="prop-delete" title="Delete">Del</button>
-        <button id="prop-duplicate" title="Duplicate">Dup</button>
-        <button id="prop-forward" title="Bring Forward">↑</button>
-        <button id="prop-backward" title="Send Backward">↓</button>
+        <label for="image-url-input">Image URL</label>
+        <input type="text" id="image-url-input" placeholder="https://example.com/image.png">
       </div>
     </div>
     <!-- Brush Options Panel (visible in draw mode) -->
@@ -109,6 +136,11 @@
         <label for="brush-width">Width</label>
         <input type="range" id="brush-width" min="1" max="40" value="3">
       </div>
+    </div>
+    <!-- Object List Panel (hidden by default) -->
+    <div id="object-list-panel" class="hidden">
+      <div class="panel-title">Objects</div>
+      <div id="object-list" role="listbox" aria-label="Canvas objects" tabindex="0"></div>
     </div>
     <!-- Bottom Bar -->
     <div id="bottom-bar">
@@ -125,6 +157,6 @@
   <input type="file" id="file-input-image" accept="image/*" style="display:none">
   <input type="file" id="file-input-json" accept=".json" style="display:none">
   <script src="vendor/fabric.min.js"></script>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

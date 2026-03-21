@@ -464,3 +464,355 @@ test.describe('Arrow tool performance', () => {
     expect(result.isGroup).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Line Tool
+// ---------------------------------------------------------------------------
+test.describe('Line Tool', () => {
+  test('L key switches to line tool', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'l');
+    const btn = page.locator('.tool-btn[data-tool="line"]');
+    await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('draws a line on drag', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'l');
+    const canvasEl = page.locator('.upper-canvas');
+    const box = await canvasEl.boundingBox();
+    await page.mouse.move(box.x + 100, box.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 300, box.y + 200, { steps: 5 });
+    await page.mouse.up();
+    await page.press('body', 'v');
+    const count = await page.evaluate(() => canvas.getObjects().length);
+    expect(count).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Polygon Tool
+// ---------------------------------------------------------------------------
+test.describe('Polygon Tool', () => {
+  test('P key switches to polygon tool', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'p');
+    const btn = page.locator('.tool-btn[data-tool="polygon"]');
+    await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('Escape cancels polygon drawing', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'p');
+    const canvasEl = page.locator('.upper-canvas');
+    const box = await canvasEl.boundingBox();
+    await page.mouse.click(box.x + 100, box.y + 100);
+    await page.mouse.click(box.x + 200, box.y + 100);
+    await page.press('body', 'Escape');
+    const count = await page.evaluate(() => canvas.getObjects().length);
+    expect(count).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Object ID System
+// ---------------------------------------------------------------------------
+test.describe('Object ID System', () => {
+  test('new objects get a caveId assigned', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'r');
+    const canvasEl = page.locator('.upper-canvas');
+    const box = await canvasEl.boundingBox();
+    await page.mouse.move(box.x + 100, box.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 200, box.y + 200, { steps: 5 });
+    await page.mouse.up();
+    const hasId = await page.evaluate(() => {
+      const obj = canvas.getObjects()[0];
+      return typeof obj.caveId === 'string' && obj.caveId.length > 0;
+    });
+    expect(hasId).toBe(true);
+  });
+
+  test('caveId persists through JSON round-trip', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.press('body', 'r');
+    const canvasEl = page.locator('.upper-canvas');
+    const box = await canvasEl.boundingBox();
+    await page.mouse.move(box.x + 100, box.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 200, box.y + 200, { steps: 5 });
+    await page.mouse.up();
+
+    const result = await page.evaluate(() => {
+      const obj = canvas.getObjects()[0];
+      const originalId = obj.caveId;
+      const json = canvas.toJSON(['caveId', 'caveName']);
+      return { originalId, jsonHasId: !!json.objects[0].caveId, jsonId: json.objects[0].caveId };
+    });
+    expect(result.jsonHasId).toBe(true);
+    expect(result.jsonId).toBe(result.originalId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Responsive Layout
+// ---------------------------------------------------------------------------
+test.describe('Responsive Layout', () => {
+  test('toolbar moves to top on tablet viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 700, height: 1024 });
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForSelector('#toolbar');
+    const toolbar = page.locator('#toolbar');
+    const box = await toolbar.boundingBox();
+    expect(box.width).toBeGreaterThan(box.height);
+  });
+
+  test('toolbar is vertical sidebar on desktop', async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 800 });
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForSelector('#toolbar');
+    const toolbar = page.locator('#toolbar');
+    const box = await toolbar.boundingBox();
+    expect(box.height).toBeGreaterThan(box.width);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Connector System
+// ---------------------------------------------------------------------------
+test.describe('Connector System', () => {
+  test('C key switches to connector tool', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.press('body', 'c');
+    const btn = page.locator('.tool-btn[data-tool="connector"]');
+    await expect(btn).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('connector button exists in toolbar', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForSelector('.tool-btn[data-tool="connector"]');
+    await expect(page.locator('.tool-btn[data-tool="connector"]')).toBeVisible();
+  });
+
+  test('moving source object updates connector position', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+
+    // Create two rectangles and a connector programmatically
+    const connectorLeft = await page.evaluate(() => {
+      const r1 = new fabric.Rect({
+        left: 50, top: 50, width: 80, height: 80,
+        fill: '#ff0000', stroke: '#fff', strokeWidth: 1,
+      });
+      const r2 = new fabric.Rect({
+        left: 300, top: 50, width: 80, height: 80,
+        fill: '#00ff00', stroke: '#fff', strokeWidth: 1,
+      });
+      canvas.add(r1);
+      canvas.add(r2);
+      canvas.renderAll();
+
+      // Import createConnector via the module — it's already loaded
+      // Use the global reference to connectors module
+      const sourceId = r1.caveId;
+      const targetId = r2.caveId;
+
+      // We need to call createConnector. Since modules are loaded, access via import.
+      // Instead, simulate by calling the function directly from the window.
+      // The module system doesn't expose globals, so we'll create the connector manually.
+      // Actually, let's use dynamic import or access the module's exports through the app.
+      // Simplest: call through a helper we know is wired up.
+      return { sourceId, targetId };
+    });
+
+    // Create connector by importing the module in-page
+    await page.evaluate(async ({ sourceId, targetId }) => {
+      const mod = await import('./connectors.js');
+      mod.createConnector(sourceId, 'right', targetId, 'left', canvas);
+      canvas.renderAll();
+    }, connectorLeft);
+
+    // Get initial connector position
+    const initialPos = await page.evaluate(() => {
+      const conn = canvas.getObjects().find(o => o.isConnector);
+      return conn ? { left: conn.left, top: conn.top } : null;
+    });
+    expect(initialPos).not.toBeNull();
+
+    // Move source object
+    await page.evaluate(() => {
+      const r1 = canvas.getObjects().find(o => !o.isConnector && o.fill === '#ff0000');
+      r1.set({ left: 50, top: 200 });
+      r1.setCoords();
+      canvas.fire('object:moving', { target: r1 });
+      canvas.renderAll();
+    });
+
+    // Check connector position changed
+    const newPos = await page.evaluate(() => {
+      const conn = canvas.getObjects().find(o => o.isConnector);
+      return conn ? { left: conn.left, top: conn.top } : null;
+    });
+    expect(newPos).not.toBeNull();
+    // Position should have changed (connector was rerouted)
+    expect(newPos.left !== initialPos.left || newPos.top !== initialPos.top).toBe(true);
+  });
+
+  test('deleting an object removes its connectors', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+
+    // Create two rectangles and a connector
+    await page.evaluate(async () => {
+      const r1 = new fabric.Rect({
+        left: 50, top: 50, width: 80, height: 80,
+        fill: '#ff0000', stroke: '#fff', strokeWidth: 1,
+      });
+      const r2 = new fabric.Rect({
+        left: 300, top: 50, width: 80, height: 80,
+        fill: '#00ff00', stroke: '#fff', strokeWidth: 1,
+      });
+      canvas.add(r1);
+      canvas.add(r2);
+      canvas.renderAll();
+
+      const mod = await import('./connectors.js');
+      mod.createConnector(r1.caveId, 'right', r2.caveId, 'left', canvas);
+      canvas.renderAll();
+    });
+
+    // Verify connector exists
+    const beforeCount = await page.evaluate(() =>
+      canvas.getObjects().filter(o => o.isConnector).length
+    );
+    expect(beforeCount).toBe(1);
+
+    // Remove one of the rectangles
+    await page.evaluate(() => {
+      const r1 = canvas.getObjects().find(o => !o.isConnector && o.fill === '#ff0000');
+      canvas.remove(r1);
+      canvas.renderAll();
+    });
+
+    // Connector should be gone
+    const afterCount = await page.evaluate(() =>
+      canvas.getObjects().filter(o => o.isConnector).length
+    );
+    expect(afterCount).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Properties Discoverability
+// ---------------------------------------------------------------------------
+test.describe('Properties Discoverability', () => {
+  test('shows empty state when nothing selected', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    const emptyState = page.locator('#props-empty-state');
+    await expect(emptyState).toBeVisible();
+    await expect(emptyState).toContainText('Select an object');
+  });
+
+  test('properties panel is visible by default', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    const panel = page.locator('#properties-panel');
+    await expect(panel).toBeVisible();
+  });
+
+  test('Q key toggles properties panel', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    const panel = page.locator('#properties-panel');
+    await expect(panel).toBeVisible();
+    await page.press('body', 'q');
+    await expect(panel).not.toBeVisible();
+    await page.press('body', 'q');
+    await expect(panel).toBeVisible();
+  });
+
+  test('properties content shown when object selected', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+
+    await page.evaluate(() => {
+      const rect = new fabric.Rect({ left: 100, top: 100, width: 100, height: 100, fill: '#4a9eff' });
+      canvas.add(rect);
+      canvas.setActiveObject(rect);
+      canvas.renderAll();
+      canvas.fire('selection:created', { selected: [rect] });
+    });
+
+    await expect(page.locator('#props-content')).toBeVisible();
+    await expect(page.locator('#props-empty-state')).not.toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Image URL Panel
+// ---------------------------------------------------------------------------
+test.describe('Image URL', () => {
+  test('image URL input visible when image tool active', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.press('body', 'i');
+    const urlPanel = page.locator('#image-url-panel');
+    await expect(urlPanel).toBeVisible();
+  });
+
+  test('image URL panel hides when switching away from image tool', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.press('body', 'i');
+    await expect(page.locator('#image-url-panel')).toBeVisible();
+    await page.press('body', 'v');
+    await expect(page.locator('#image-url-panel')).not.toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Object List Panel
+// ---------------------------------------------------------------------------
+test.describe('Object List Panel', () => {
+  test('O key toggles object list panel', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.press('body', 'o');
+    const panel = page.locator('#object-list-panel');
+    await expect(panel).toBeVisible();
+    await page.press('body', 'o');
+    await expect(panel).not.toBeVisible();
+  });
+
+  test('shows correct object count', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.evaluate(() => {
+      const r1 = new fabric.Rect({ left: 50, top: 50, width: 80, height: 80, fill: 'red' });
+      const r2 = new fabric.Rect({ left: 200, top: 50, width: 80, height: 80, fill: 'blue' });
+      canvas.add(r1);
+      canvas.add(r2);
+      canvas.renderAll();
+    });
+    await page.press('body', 'o');
+    const items = page.locator('.object-list-item');
+    await expect(items).toHaveCount(2);
+  });
+
+  test('clicking list item selects object on canvas', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.evaluate(() => {
+      canvas.add(new fabric.Rect({ left: 50, top: 50, width: 80, height: 80, fill: 'red' }));
+      canvas.renderAll();
+    });
+    await page.press('body', 'o');
+    await page.locator('.object-list-item').first().click();
+    const hasActive = await page.evaluate(() => !!canvas.getActiveObject());
+    expect(hasActive).toBe(true);
+  });
+});
