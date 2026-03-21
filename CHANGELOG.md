@@ -2,6 +2,22 @@
 
 All notable changes to Cavepaintings are documented here.
 
+## [0.3.3] - 2026-03-21
+
+### Added
+- **Owner-process watchdog** — server auto-shuts down when the parent Claude Code process exits (15-second poll via `--owner-pid`)
+- **Dated export filenames** — exports now use project directory + timestamp (e.g., `myproject-20260321-051234.png`) instead of generic `cavepaintings.png`
+
+### Fixed
+- **Windows compatibility** — 6 fixes for Windows Server / Git Bash environments:
+  - OS detection fallback via `Windows_NT` env var
+  - Owner-pid watchdog skipped on win32 (unreliable `process.kill` signal 0)
+  - PID reuse check uses `tasklist` on Windows with WSL exclusion
+  - State file paths passed via env vars (avoids backslash escape issues in `node -e`)
+  - `check-session.js` uses platform-aware liveness check
+  - `stop-server.js` uses `taskkill /F` on Windows
+- `.gitignore` scoped `scripts/` exclusion to top-level only
+
 ## [0.3.1] - 2026-03-20
 
 ### Security
