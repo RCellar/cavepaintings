@@ -704,3 +704,46 @@ test.describe('Connector System', () => {
     expect(afterCount).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Object List Panel
+// ---------------------------------------------------------------------------
+test.describe('Object List Panel', () => {
+  test('O key toggles object list panel', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.press('body', 'o');
+    const panel = page.locator('#object-list-panel');
+    await expect(panel).toBeVisible();
+    await page.press('body', 'o');
+    await expect(panel).not.toBeVisible();
+  });
+
+  test('shows correct object count', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.evaluate(() => {
+      const r1 = new fabric.Rect({ left: 50, top: 50, width: 80, height: 80, fill: 'red' });
+      const r2 = new fabric.Rect({ left: 200, top: 50, width: 80, height: 80, fill: 'blue' });
+      canvas.add(r1);
+      canvas.add(r2);
+      canvas.renderAll();
+    });
+    await page.press('body', 'o');
+    const items = page.locator('.object-list-item');
+    await expect(items).toHaveCount(2);
+  });
+
+  test('clicking list item selects object on canvas', async ({ page }) => {
+    await page.goto(`http://localhost:${PORT}`);
+    await page.waitForFunction(() => typeof window.fabric !== 'undefined');
+    await page.evaluate(() => {
+      canvas.add(new fabric.Rect({ left: 50, top: 50, width: 80, height: 80, fill: 'red' }));
+      canvas.renderAll();
+    });
+    await page.press('body', 'o');
+    await page.locator('.object-list-item').first().click();
+    const hasActive = await page.evaluate(() => !!canvas.getActiveObject());
+    expect(hasActive).toBe(true);
+  });
+});

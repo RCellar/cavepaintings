@@ -4,6 +4,7 @@ import { setupProperties, setupBrushPanel } from './properties.js';
 import { connectWebSocket, submitToClaude } from './websocket-client.js';
 import { setupDragDrop, setupImagePaste } from './image-utils.js';
 import { setupTouch } from './touch.js';
+import { setupObjectList } from './object-list.js';
 
 function updateTabTitle() {
   fetch('/api/info')
@@ -30,6 +31,7 @@ document.addEventListener('DOMContentLoaded', function () {
   setupZoomIndicator();
   setupTouch();
   setupViewport();
+  setupObjectList();
   updateTabTitle();
   document.getElementById('btn-submit').addEventListener('click', submitToClaude);
   document.getElementById('prompt-input').addEventListener('keydown', (e) => {

@@ -583,6 +583,7 @@ export function setupKeyboard() {
     }
 
     const toolMap = { v: 'select', r: 'rect', e: 'ellipse', a: 'arrow', l: 'line', p: 'polygon', d: 'draw', t: 'text', i: 'image', c: 'connector' };
+    if (key === 'o') { document.getElementById('btn-object-list')?.click(); return; }
     if (key === 'g') { toggleGrid(); return; }
     if (key === 'escape') { cancelPolygon(); connectorCancel(); return; }
     if (toolMap[key]) { setTool(toolMap[key]); return; }
