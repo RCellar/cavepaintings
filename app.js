@@ -1,8 +1,9 @@
-import { initCanvas, getCanvas, setupAutoSave, restoreFromLocalStorage, restoreTheme, handleResize, setupZoomIndicator, saveState } from './canvas-core.js';
+import { initCanvas, getCanvas, setupAutoSave, restoreFromLocalStorage, restoreTheme, handleResize, setupZoomIndicator, saveState, setupViewport } from './canvas-core.js';
 import { setupCanvasEvents, setupToolbar, setupKeyboard } from './tools.js';
 import { setupProperties, setupBrushPanel } from './properties.js';
 import { connectWebSocket, submitToClaude } from './websocket-client.js';
 import { setupDragDrop, setupImagePaste } from './image-utils.js';
+import { setupTouch } from './touch.js';
 
 function updateTabTitle() {
   fetch('/api/info')
@@ -27,6 +28,8 @@ document.addEventListener('DOMContentLoaded', function () {
   restoreTheme();
   connectWebSocket();
   setupZoomIndicator();
+  setupTouch();
+  setupViewport();
   updateTabTitle();
   document.getElementById('btn-submit').addEventListener('click', submitToClaude);
   document.getElementById('prompt-input').addEventListener('keydown', (e) => {

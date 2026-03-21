@@ -51,8 +51,9 @@ export function getRedoStack() { return redoStack; }
 // Canvas initialisation
 // ---------------------------------------------------------------------------
 export function initCanvas() {
-  const availableHeight = window.innerHeight - 48;
-  const availableWidth = window.innerWidth - 56;
+  const isTablet = window.innerWidth < 768;
+  const availableWidth = isTablet ? window.innerWidth : window.innerWidth - 56;
+  const availableHeight = isTablet ? window.innerHeight - 56 - 48 : window.innerHeight - 48;
 
   canvas = new fabric.Canvas('drawing-canvas', {
     width: availableWidth,
@@ -72,12 +73,22 @@ export function handleResize() {
   if (resizeRAF) return;
   resizeRAF = requestAnimationFrame(() => {
     resizeRAF = null;
+    const isTablet = window.innerWidth < 768;
+    const canvas = getCanvas();
     canvas.setDimensions({
-      width: window.innerWidth - 56,
-      height: window.innerHeight - 48,
+      width: isTablet ? window.innerWidth : window.innerWidth - 56,
+      height: isTablet ? window.innerHeight - 56 - 48 : window.innerHeight - 48,
     });
     canvas.requestRenderAll();
   });
+}
+
+export function setupViewport() {
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      document.getElementById('app').style.height = window.visualViewport.height + 'px';
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
