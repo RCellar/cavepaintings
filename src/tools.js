@@ -483,18 +483,25 @@ export function setupToolbar() {
   const themeBtn = document.getElementById('btn-theme');
   if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
 
+  function exportFilename(ext) {
+    const now = new Date();
+    const ts = now.toISOString().replace(/[-:]/g, '').replace('T', '-').replace(/\.\d+Z$/, '');
+    const dir = document.title.includes('—') ? document.title.split('—')[1].trim() : 'cavepaintings';
+    return `${dir}-${ts}.${ext}`;
+  }
+
   document.getElementById('btn-export-png').addEventListener('click', () => {
-    downloadFile(canvas.toDataURL({ format: 'png', multiplier: 2 }), 'cavepaintings.png');
+    downloadFile(canvas.toDataURL({ format: 'png', multiplier: 2 }), exportFilename('png'));
   });
 
   document.getElementById('btn-export-svg').addEventListener('click', () => {
     const blob = new Blob([canvas.toSVG()], { type: 'image/svg+xml' });
-    downloadFile(URL.createObjectURL(blob), 'cavepaintings.svg', true);
+    downloadFile(URL.createObjectURL(blob), exportFilename('svg'), true);
   });
 
   document.getElementById('btn-export-json').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(canvas.toJSON(), null, 2)], { type: 'application/json' });
-    downloadFile(URL.createObjectURL(blob), 'cavepaintings.json', true);
+    downloadFile(URL.createObjectURL(blob), exportFilename('json'), true);
   });
 
   document.getElementById('btn-import-json').addEventListener('click', () => {
