@@ -285,50 +285,16 @@ The client is split into focused ES modules:
 - `hooks/` -- UserPromptSubmit hook with multi-submission tracking, SessionStart hook for dependency install
 - `.claude-plugin/` -- plugin metadata for marketplace installation
 
-## REST API
+## API
 
-### GET /api/info
+Cavepaintings exposes a REST API and WebSocket protocol for programmatic canvas interaction. See **[API.md](API.md)** for the full reference, including:
 
-Returns the project directory name (used for dynamic browser tab title).
-
-### GET /api/submissions?since=\<timestamp\>
-
-Returns all submissions newer than the given timestamp:
-
-```json
-{
-  "submissions": [
-    {
-      "id": "submission-1774030611729",
-      "timestamp": 1774030611729,
-      "prompt": "review this architecture",
-      "png": "/tmp/cavepaintings/submissions/submission-1774030611729.png",
-      "json": "/tmp/cavepaintings/submissions/submission-1774030611729.json"
-    }
-  ]
-}
-```
-
-### POST /api/canvas
-
-Forwards Fabric.js objects to the connected browser client.
-
-```bash
-curl -X POST http://localhost:9731/api/canvas \
-  -H 'Content-Type: application/json' \
-  -d '{"diagram":{"objects":[{"type":"rect","left":50,"top":50,"width":100,"height":80,"fill":"#ff0000"}]},"mode":"merge"}'
-```
-
-Returns `{"ok":true}` on success, `503` if no browser connected, `400` for validation errors, `413` if payload exceeds 5 MB, or `429` if rate limited.
-
-**Validation rules:**
-- `diagram` (required) -- object with an `objects` array
-- `mode` (required) -- `"merge"` or `"replace"`
-- Each object must have a string `type` field
-- No unknown top-level keys
-- Max body size: 5 MB
-
-**Rate limits:** 30 requests/minute per IP. GET endpoints: 60/minute. WebSocket: 100 messages/minute per connection.
+- **GET /api/info** -- project directory name
+- **GET /api/submissions?since=\<timestamp\>** -- poll for canvas submissions
+- **POST /api/canvas** -- push Fabric.js objects to the canvas in real time
+- **WebSocket protocol** -- submit/ack/load/displaced message types
+- **Security** -- headers, origin validation, rate limits
+- **CLI options** -- `--port`, `--max-submissions`, `--owner-pid`
 
 ## Running Tests
 
