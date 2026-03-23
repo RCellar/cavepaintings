@@ -70,12 +70,27 @@ STATE_DIR="$(dirname "$STATE_FILE")"
 mkdir -p "$STATE_DIR"
 SERVER_LOG="$STATE_DIR/server.log"
 
+# Determine the owner PID for the lifecycle watchdog.
+# In daemon mode the direct parent ($PPID) is often a transient shell spawned
+# by a tool runner (e.g. Claude Code's Bash tool) that exits as soon as the
+# command completes.  Walk up one level to the grandparent — typically the
+# long-lived host process whose lifetime should govern the server.
+if [[ "$FOREGROUND" == "true" ]]; then
+  OWNER_PID="$PPID"
+else
+  OWNER_PID="$(ps -o ppid= -p $PPID 2>/dev/null | tr -d ' ')"
+  # Fall back to $PPID if the grandparent lookup fails or returns init/systemd
+  if [[ -z "$OWNER_PID" || "$OWNER_PID" -le 1 ]] 2>/dev/null; then
+    OWNER_PID="$PPID"
+  fi
+fi
+
 # Start server
 if [[ "$FOREGROUND" == "true" ]]; then
   # Foreground mode: background the node process minimally (no nohup/disown)
   # so it remains a child of this script. This keeps Codex from reaping it
   # and avoids nohup issues on Windows (MSYS/Cygwin).
-  CAVEPAINTINGS_PROJECT_DIR="${CAVEPAINTINGS_PROJECT_DIR:-}" node "$PROJECT_ROOT/server.js" --no-open --owner-pid "$PPID" > "$SERVER_LOG" 2>&1 &
+  CAVEPAINTINGS_PROJECT_DIR="${CAVEPAINTINGS_PROJECT_DIR:-}" node "$PROJECT_ROOT/server.js" --no-open --owner-pid "$OWNER_PID" > "$SERVER_LOG" 2>&1 &
   SERVER_PID=$!
 
   # Poll for state file (same as background path)
@@ -102,7 +117,7 @@ if [[ "$FOREGROUND" == "true" ]]; then
   echo "{\"error\": \"Server did not start within 5 seconds. Check $SERVER_LOG\"}"
   exit 1
 else
-  CAVEPAINTINGS_PROJECT_DIR="${CAVEPAINTINGS_PROJECT_DIR:-}" nohup node "$PROJECT_ROOT/server.js" --no-open --owner-pid "$PPID" > "$SERVER_LOG" 2>&1 &
+  CAVEPAINTINGS_PROJECT_DIR="${CAVEPAINTINGS_PROJECT_DIR:-}" nohup node "$PROJECT_ROOT/server.js" --no-open --owner-pid "$OWNER_PID" > "$SERVER_LOG" 2>&1 &
   SERVER_PID=$!
   disown "$SERVER_PID" 2>/dev/null
 
